@@ -204,6 +204,9 @@ struct AnalyzeView: View {
                     .fontWeight(.semibold)
             }
             Spacer()
+            Text("⌘⌫").font(.system(size: 11)).foregroundStyle(.secondary)
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.hairline))
             Button("Ukázat ve Finderu") {
                 NSWorkspace.shared.activateFileViewerSelecting(selected.map { URL(fileURLWithPath: $0.path) })
             }
