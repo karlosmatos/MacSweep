@@ -246,8 +246,12 @@ private struct MessageView: View {
 
     private var lines: [String] { message.text.components(separatedBy: "\n") }
 
+    /// Bold and code only. Links are stripped: replies are built from files Claude read, and a planted
+    /// link could carry data out of the Mac when clicked.
     private func markdown(_ text: String) -> AttributedString {
-        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+        var result = (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+        for run in result.runs where run.link != nil { result[run.range].link = nil }
+        return result
     }
 
     private func go(_ target: Recommendation.Target) {

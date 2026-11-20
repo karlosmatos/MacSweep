@@ -36,8 +36,13 @@ final class StartupModel {
         defer { loading = false }
         async let btm = ProcessRunner.output("/usr/bin/sfltool", ["dumpbtm"])
         async let disabled = ProcessRunner.output("/bin/launchctl", ["print-disabled", "gui/\(Self.uid)"])
-        async let logins = ProcessRunner.output("/usr/bin/osascript", ["-e",
-            "tell application \"System Events\" to get {name, path} of every login item"])
+        // One "name<TAB>path" line per item, so names with commas or quotes parse correctly.
+        async let logins = ProcessRunner.output("/usr/bin/osascript", [
+            "-e", "set out to \"\"",
+            "-e", "tell application \"System Events\" to repeat with i in every login item",
+            "-e", "set out to out & (name of i) & tab & (path of i) & linefeed",
+            "-e", "end repeat",
+            "-e", "return out"])
         let (btmText, disabledText, loginText) = (try? await btm, try? await disabled, try? await logins)
 
         var result: [StartupItem] = []
@@ -65,12 +70,11 @@ final class StartupModel {
     // MARK: Login items (System Events)
 
     private static func loginItems(from text: String) -> [StartupItem] {
-        // "Raycast, ServerPulse, /Applications/Raycast.app, /Applications/ServerPulse.app"
-        let parts = text.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: ", ").filter { !$0.isEmpty }
-        let half = parts.count / 2
-        var items = (0..<half).map { i in
-            StartupItem(id: "login:" + parts[i], kind: .loginItem, name: parts[i], detail: description(forApp: parts[half + i]),
-                        appPath: parts[half + i], plistPath: nil, enabled: true)
+        var items: [StartupItem] = text.components(separatedBy: "\n").compactMap { line in
+            let parts = line.components(separatedBy: "\t")
+            guard parts.count == 2, !parts[0].isEmpty else { return nil }
+            return StartupItem(id: "login:" + parts[0], kind: .loginItem, name: parts[0], detail: description(forApp: parts[1]),
+                               appPath: parts[1], plistPath: nil, enabled: true)
         }
         let removed = UserDefaults.standard.dictionary(forKey: removedKey) as? [String: String] ?? [:]
         for (name, path) in removed.sorted(by: { $0.key < $1.key }) where !items.contains(where: { $0.name == name }) {
@@ -86,16 +90,21 @@ final class StartupModel {
 
     private func setLoginItem(_ item: StartupItem, enabled: Bool) async {
         var removed = UserDefaults.standard.dictionary(forKey: Self.removedKey) as? [String: String] ?? [:]
-        let script: String
+        // Values go in as arguments, never into the script source.
+        let args: [String]
         if enabled, let path = item.appPath {
-            script = "tell application \"System Events\" to make login item at end with properties {path:\"\(path)\", hidden:false}"
+            args = ["-e", "on run argv",
+                    "-e", "tell application \"System Events\" to make login item at end with properties {path:(item 1 of argv), hidden:false}",
+                    "-e", "end run", path]
             removed[item.name] = nil
         } else {
-            script = "tell application \"System Events\" to delete login item \"\(item.name)\""
+            args = ["-e", "on run argv",
+                    "-e", "tell application \"System Events\" to delete login item (item 1 of argv)",
+                    "-e", "end run", item.name]
             removed[item.name] = item.appPath
         }
         UserDefaults.standard.set(removed, forKey: Self.removedKey)
-        _ = try? await ProcessRunner.output("/usr/bin/osascript", ["-e", script])
+        _ = try? await ProcessRunner.output("/usr/bin/osascript", args)
     }
 
     // MARK: Agents and helpers (BTM + launchctl)
