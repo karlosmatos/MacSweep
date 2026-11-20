@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 import SwiftUI
 
 enum Section: String, CaseIterable, Identifiable {
@@ -63,6 +64,17 @@ struct MacSweepApp: App {
     }
 }
 
+/// Sparkle: checks the appcast on GitHub Releases daily and installs signed updates.
+@MainActor
+enum Updates {
+    static let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+
+    static func check() {
+        NSApp.activate(ignoringOtherApps: true)
+        controller.checkForUpdates(nil)
+    }
+}
+
 /// Opens the main window when MacSweep is launched or reopened from Finder, Spotlight or the Dock;
 /// a launch at login stays in the menu bar only.
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -71,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor private static var pendingOpen = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        _ = Updates.controller
         let event = NSAppleEventManager.shared().currentAppleEvent
         let atLogin = event?.eventID == kAEOpenApplication
             && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
