@@ -50,6 +50,7 @@ struct PrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(isEnabled ? (scheme == .dark && tint == Theme.accent ? Color.black.opacity(0.85) : .white) : .secondary)
+            .padding(.horizontal, 16) // breathing room when the button hugs its label (.fixedSize)
             .frame(maxWidth: .infinity, minHeight: 36)
             .background(isEnabled ? AnyShapeStyle(tint) : AnyShapeStyle(Theme.fill),
                         in: RoundedRectangle(cornerRadius: 8, style: .continuous))
