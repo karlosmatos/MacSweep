@@ -58,6 +58,7 @@ struct MacSweepApp: App {
                 .environment(sweeper)
                 .frame(minWidth: 900, minHeight: 600)
         }
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1100, height: 720)
     }
 }
@@ -116,30 +117,39 @@ struct MainView: View {
     @Environment(Sweeper.self) private var sweeper
 
     var body: some View {
-        @Bindable var state = state
-        NavigationSplitView {
-            List(Section.allCases, selection: Binding(get: { state.section }, set: { if let s = $0 { state.section = s } })) { section in
-                Label(section.title, systemImage: section.icon).tag(section)
-            }
-            .navigationSplitViewColumnWidth(200)
-            .safeAreaInset(edge: .bottom) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(Format.gigabytes(monitor.diskFree)) GB volno z \(Format.gigabytes(monitor.diskTotal)) GB")
-                    if sweeper.totalReclaimed > 0, let since = sweeper.since {
-                        Text("Uvolněno \(Format.bytes(sweeper.totalReclaimed)) od \(since.formatted(.dateTime.day().month(.defaultDigits)))")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(16)
-            }
-        } detail: {
+        HStack(spacing: 0) {
+            sidebar
+            Divider()
             detail(for: state.section)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .ignoresSafeArea(.container, edges: .top)
         .onAppear { monitor.setVisible(true) }
         .onDisappear { monitor.setVisible(false) }
+    }
+
+    /// Plain rows instead of a sidebar List, which would paint the selection in the system's blue.
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Section.allCases) { section in
+                SidebarRow(section: section, selected: state.section == section) { state.section = section }
+            }
+            Spacer()
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(Format.gigabytes(monitor.diskFree)) GB volno z \(Format.gigabytes(monitor.diskTotal)) GB")
+                if sweeper.totalReclaimed > 0, let since = sweeper.since {
+                    Text("Uvolněno \(Format.bytes(sweeper.totalReclaimed)) od \(since.formatted(.dateTime.day().month(.defaultDigits)))")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 52) // clears the traffic lights
+        .padding(.bottom, 14)
+        .frame(width: 210)
+        .background(Theme.fill)
     }
 
     @ViewBuilder
@@ -150,5 +160,32 @@ struct MainView: View {
         case .startup: StartupView()
         case .advisor: AdvisorView()
         }
+    }
+}
+
+/// Sidebar entry: neutral fill when selected or hovered, accent only on the selected icon.
+struct SidebarRow: View {
+    let section: Section
+    let selected: Bool
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: section.icon)
+                    .foregroundStyle(selected ? Theme.accent : .secondary)
+                    .frame(width: 18)
+                Text(section.title).fontWeight(selected ? .semibold : .regular)
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 13))
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .background(selected || hovered ? Theme.fill : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(PressableStyle())
+        .onHover { hovered = $0 }
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
