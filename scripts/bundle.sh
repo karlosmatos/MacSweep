@@ -26,6 +26,15 @@ else
     IDENTITY=${IDENTITY:-$(security find-identity -v -p codesigning | awk '/Apple Development/ {print $2; exit}')}
     TIMESTAMP=--timestamp=none
 fi
+
+# Sparkle, minus the XPC services that only sandboxed apps need. Nested code is signed before the app.
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
+mkdir -p "$APP/Contents/Frameworks"
+ditto .build/release/Sparkle.framework "$SPARKLE"
+rm -rf "$SPARKLE/Versions/B/XPCServices"
+for nested in "$SPARKLE/Versions/B/Autoupdate" "$SPARKLE/Versions/B/Updater.app" "$SPARKLE"; do
+    codesign --force --options runtime $TIMESTAMP --sign "${IDENTITY:--}" "$nested"
+done
 codesign --force --options runtime $TIMESTAMP --entitlements Resources/MacSweep.entitlements --sign "${IDENTITY:--}" "$APP"
 codesign --verify --strict "$APP"
 echo "Built $APP ${VERSION:-1.0} ($BUILD)"

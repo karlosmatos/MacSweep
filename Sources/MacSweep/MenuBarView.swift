@@ -77,6 +77,7 @@ struct MenuBarView: View {
                 Text("Uvolněno \(Format.bytes(sweeper.totalReclaimed)) od \(since.formatted(.dateTime.day().month(.defaultDigits)))")
             }
             Divider()
+            Button("Zkontrolovat aktualizace…") { Updates.check() }
             Button("Ukončit MacSweep") { NSApp.terminate(nil) }.keyboardShortcut("q")
         } label: {
             Image(systemName: "ellipsis").frame(width: 28, height: 28)
