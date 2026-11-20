@@ -32,6 +32,7 @@ final class AppState {
 
 @main
 struct MacSweepApp: App {
+    @NSApplicationDelegateAdaptor private var delegate: AppDelegate
     @State private var monitor = SystemMonitor()
     @State private var state = AppState()
     @State private var advisor = Advisor()
@@ -61,16 +62,40 @@ struct MacSweepApp: App {
     }
 }
 
+/// Opens the main window when MacSweep is launched or reopened from Finder, Spotlight or the Dock;
+/// a launch at login stays in the menu bar only.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Set by the menu bar label once it appears; a launch that comes first waits for it.
+    @MainActor static var openMain: (() -> Void)? { didSet { if pendingOpen { pendingOpen = false; openMain?() } } }
+    @MainActor private static var pendingOpen = false
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let event = NSAppleEventManager.shared().currentAppleEvent
+        let atLogin = event?.eventID == kAEOpenApplication
+            && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+        guard !atLogin else { return }
+        if let open = Self.openMain { open() } else { Self.pendingOpen = true }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        Self.openMain?()
+        return false
+    }
+}
+
 /// Icon only by default. Shows free space when it runs low, temperature when the Mac overheats,
 /// and the reading the user picked otherwise.
 struct MenuBarLabel: View {
     let monitor: SystemMonitor
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: monitor.overheating ? "thermometer.high" : "sparkle")
             if let text { Text(text).monospacedDigit() }
         }
+        // The label is the one view that always exists, so it lends the delegate a way to open the window.
+        .onAppear { AppDelegate.openMain = { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) } }
     }
 
     private var text: String? {

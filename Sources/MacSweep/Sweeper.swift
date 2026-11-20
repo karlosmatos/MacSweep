@@ -1,8 +1,8 @@
 import AppKit
 import Observation
 
-/// Drives ~/.local/bin/disk-cleanup.sh: previews what it would free, runs it, keeps a lifetime tally,
-/// remembers unticked categories (shared with the weekly job through a skip file) and toggles the job.
+/// Drives the bundled disk-cleanup.sh: previews what it would free, runs it (on demand and weekly),
+/// keeps a lifetime tally and remembers unticked categories in a skip file the script reads.
 @MainActor
 @Observable
 final class Sweeper {
@@ -66,17 +66,15 @@ final class Sweeper {
     enum Phase: Equatable { case idle, running, done(freed: Int64, trashed: Bool), failed(String) }
 
     private static let home = FileManager.default.homeDirectoryForCurrentUser.path
-    private static let script = home + "/.local/bin/disk-cleanup.sh"
+    /// Bundled with the app; the repo copy is the fallback for `swift run`.
+    private static let script = Bundle.main.path(forResource: "disk-cleanup", ofType: "sh") ?? home + "/.local/bin/disk-cleanup.sh"
     private static let skipFile = home + "/.config/disk-cleanup/skip"
-    private static let agentPlist = home + "/Library/LaunchAgents/com.karel.disk-cleanup.plist"
-    private static let agentLabel = "com.karel.disk-cleanup"
-    private static var domain: String { "gui/\(getuid())" }
 
     var items: [Item] = []
     var scanning = false
     var phase: Phase = .idle
     var current: String?
-    var autoEnabled = false
+    private(set) var autoEnabled = UserDefaults.standard.bool(forKey: "autoSweep")
     private(set) var skipped: Set<String> = Sweeper.loadSkipped()
     private(set) var totalReclaimed = Int64(UserDefaults.standard.integer(forKey: "reclaimedTotal"))
     private(set) var since = UserDefaults.standard.object(forKey: "reclaimedSince") as? Date
@@ -97,7 +95,6 @@ final class Sweeper {
 
     /// Rescans at most every 5 minutes; called whenever the popover opens. Old results stay visible meanwhile.
     func refresh() {
-        refreshAuto()
         if scanning || phase == .running { return }
         if let lastScan, Date().timeIntervalSince(lastScan) < 300 { return }
         scan()
@@ -149,18 +146,49 @@ final class Sweeper {
 
     func dismissResult() { phase = .idle }
 
-    func refreshAuto() {
-        Task {
-            let status = (try? await ProcessRunner("/bin/launchctl", ["print", "\(Self.domain)/\(Self.agentLabel)"]).run().status) ?? 1
-            autoEnabled = status == 0
+    // MARK: Weekly run (Sunday 10:00), kept in the app so there is no LaunchAgent to install.
+
+    init() {
+        migrateLegacyAgent()
+        Task { [weak self] in
+            while true {
+                try? await Task.sleep(for: .seconds(60))
+                self?.sweepIfDue()
+                try? await Task.sleep(for: .seconds(3540))
+            }
         }
     }
 
     func setAuto(_ enabled: Bool) {
+        autoEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "autoSweep")
+        // Counting from now, so switching it on midweek doesn't start a sweep right away.
+        if enabled { UserDefaults.standard.set(Date(), forKey: "lastAutoSweep") }
+    }
+
+    /// Catches up after sleep or a day the app wasn't running, like launchd's calendar jobs.
+    private func sweepIfDue() {
+        guard autoEnabled, phase != .running,
+              let due = Calendar.current.nextDate(after: Date(), matching: DateComponents(hour: 10, minute: 0, weekday: 1),
+                                                  matchingPolicy: .nextTime, direction: .backward)
+        else { return }
+        let last = UserDefaults.standard.object(forKey: "lastAutoSweep") as? Date ?? .distantPast
+        guard last < due else { return }
+        UserDefaults.standard.set(Date(), forKey: "lastAutoSweep")
+        sweep()
+    }
+
+    /// Earlier builds ran the weekly job from ~/Library/LaunchAgents; carry its on/off state over and remove it.
+    private func migrateLegacyAgent() {
+        let label = "com.karel.disk-cleanup"
+        let plist = URL(fileURLWithPath: Self.home + "/Library/LaunchAgents/\(label).plist")
+        guard FileManager.default.fileExists(atPath: plist.path) else { return }
         Task {
-            let args = enabled ? ["bootstrap", Self.domain, Self.agentPlist] : ["bootout", "\(Self.domain)/\(Self.agentLabel)"]
-            _ = try? await ProcessRunner("/bin/launchctl", args).run()
-            refreshAuto()
+            let target = "gui/\(getuid())/\(label)"
+            let loaded = (try? await ProcessRunner("/bin/launchctl", ["print", target]).run().status) == 0
+            setAuto(loaded)
+            if loaded { _ = try? await ProcessRunner("/bin/launchctl", ["bootout", target]).run() }
+            try? FileManager.default.trashItem(at: plist, resultingItemURL: nil)
         }
     }
 

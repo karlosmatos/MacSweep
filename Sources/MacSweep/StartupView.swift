@@ -174,7 +174,6 @@ final class StartupModel {
     }
 
     private static func friendlyName(label: String, btmName: String, parentApp: String?) -> String {
-        if label == "com.karel.disk-cleanup" { return "MacSweep týdenní úklid" }
         let executableLike = ["bash", "sh", "python3", "node"].contains(btmName) || btmName.contains(".")
         if let parentApp {
             let app = FileManager.default.displayName(atPath: parentApp).replacingOccurrences(of: ".app", with: "")

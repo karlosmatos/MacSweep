@@ -21,6 +21,7 @@ final class AnalyzeModel {
         let key = current ?? "/"
         selection = []
         if !force, let cached = cache[key] { result = cached; readDates(cached); return }
+        if let missing = Shell.moleMissing { error = missing; return }
         loading = true
         error = nil
         defer { loading = false }

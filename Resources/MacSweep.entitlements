@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Not sandboxed: reads sensors, other apps' processes and all of ~/Library. -->
+    <key>com.apple.security.app-sandbox</key><false/>
+    <!-- Login items are read and switched through System Events. -->
+    <key>com.apple.security.automation.apple-events</key><true/>
+</dict>
+</plist>

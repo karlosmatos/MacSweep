@@ -1,6 +1,5 @@
 #!/bin/bash
-# Disk cleanup. Run weekly by launchd (~/Library/LaunchAgents/com.karel.disk-cleanup.plist)
-# and on demand by MacSweep.
+# Disk cleanup. Bundled in MacSweep.app, which runs it on demand and every Sunday at 10:00.
 #   --dry-run   print "<category>\t<bytes>" for what would be removed, change nothing
 # Categories listed one per line in ~/.config/disk-cleanup/skip are left alone (MacSweep writes it).
 # DISK_CLEANUP_PROGRESS=<file>: the category being cleaned is written there (MacSweep shows it).
