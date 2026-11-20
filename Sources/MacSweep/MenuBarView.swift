@@ -66,6 +66,7 @@ struct MenuBarView: View {
             Button("Otevřít MacSweep") { open(.analyze) }.keyboardShortcut("o")
             Button("Znovu naskenovat") { sweeper.scan() }.keyboardShortcut("r")
             Divider()
+            Toggle("Spouštět po přihlášení", isOn: Binding(get: { LoginItem.enabled }, set: { LoginItem.enabled = $0 }))
             Toggle("Úklid každou neděli v 10:00", isOn: Binding(get: { sweeper.autoEnabled }, set: { sweeper.setAuto($0) }))
             Picker("V menu baru ukazovat", selection: Binding(get: { monitor.readout }, set: { monitor.readout = $0 })) {
                 Text("Jen ikonu").tag(SystemMonitor.Readout.none)

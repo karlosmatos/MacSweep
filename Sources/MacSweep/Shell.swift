@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ServiceManagement
 
 enum Shell {
     static let environment: [String: String] = {
@@ -16,6 +17,11 @@ enum Shell {
     }
 
     static let mo: String = firstExecutable(["/opt/homebrew/bin/mo", "/usr/local/bin/mo"]) ?? "/opt/homebrew/bin/mo"
+
+    /// Disk analysis and app removal run on Mole; says how to get it when it's missing.
+    static var moleMissing: String? {
+        FileManager.default.isExecutableFile(atPath: mo) ? nil : "Tahle část potřebuje Mole. Nainstaluj ho v Terminálu: brew install mole"
+    }
 
     static let claude: String? = {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -201,5 +207,19 @@ enum Format {
     static func gigabytes(_ bytes: Int64) -> String {
         let value = Double(bytes) / 1_000_000_000
         return value.formatted(.number.precision(.fractionLength(value < 100 ? 1 : 0)))
+    }
+}
+
+/// Launch at login through the system's login items (shows as MacSweep in System Settings).
+enum LoginItem {
+    static var enabled: Bool {
+        get { SMAppService.mainApp.status == .enabled }
+        set {
+            do {
+                if newValue { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            } catch {
+                SMAppService.openSystemSettingsLoginItems()
+            }
+        }
     }
 }

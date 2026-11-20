@@ -22,6 +22,7 @@ final class AppsModel {
     var unused: [InstalledApp] { apps.filter { lastUsed[$0.path] == nil } }
 
     func loadApps() async {
+        if let missing = Shell.moleMissing { phase = .failed(missing); return }
         loadingApps = true
         defer { loadingApps = false }
         do {
@@ -232,6 +233,9 @@ struct AppsView: View {
                 }
                 .padding(24)
             }
+        } else if case .failed(let message) = model.phase {
+            Text(message).font(.callout).foregroundStyle(Theme.danger).textSelection(.enabled)
+                .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             VStack(spacing: 8) {
                 Image(systemName: "square.grid.2x2").font(.system(size: 30, weight: .light)).foregroundStyle(.tertiary)
