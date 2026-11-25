@@ -9,11 +9,11 @@ enum Section: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .analyze: "Analýza disku"
-        case .files: "Soubory"
-        case .apps: "Aplikace"
-        case .startup: "Spouštění"
-        case .advisor: "Poradce"
+        case .analyze: String(localized: "Analýza disku")
+        case .files: String(localized: "Soubory")
+        case .apps: String(localized: "Aplikace")
+        case .startup: String(localized: "Spouštění")
+        case .advisor: String(localized: "Poradce")
         }
     }
 
@@ -203,8 +203,10 @@ struct FreeSpaceChart: View {
                 .frame(height: 36)
                 .accessibilityLabel("Volné místo za posledních 30 dní")
                 if let perDay = history.perDay {
-                    Text(perDay < 0 ? "Ubývá \(Format.bytes(Int64(-perDay))) denně" : "Přibývá \(Format.bytes(Int64(perDay))) denně")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Group {
+                        if perDay < 0 { Text("Ubývá \(Format.bytes(Int64(-perDay))) denně") } else { Text("Přibývá \(Format.bytes(Int64(perDay))) denně") }
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
                 }
             }
         }

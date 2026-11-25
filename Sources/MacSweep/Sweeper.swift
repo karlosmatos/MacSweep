@@ -16,16 +16,16 @@ final class Sweeper {
 
         var title: String {
             switch key {
-            case "caches": "Cache vývojářských nástrojů"
-            case "app_caches": "Cache aplikací"
-            case "docker": "Docker build cache"
-            case "xcode": "Xcode build data"
-            case "simulators": "Simulátory a symboly zařízení"
-            case "homebrew": "Stažené balíčky Homebrew"
-            case "logs": "Staré logy"
-            case "codex": "Staré Codex konverzace"
-            case "downloads": "Staré stažené soubory"
-            case "node_modules": "Závislosti nečinných projektů"
+            case "caches": String(localized: "Cache vývojářských nástrojů")
+            case "app_caches": String(localized: "Cache aplikací")
+            case "docker": String(localized: "Docker build cache")
+            case "xcode": String(localized: "Xcode build data")
+            case "simulators": String(localized: "Simulátory a symboly zařízení")
+            case "homebrew": String(localized: "Stažené balíčky Homebrew")
+            case "logs": String(localized: "Staré logy")
+            case "codex": String(localized: "Staré Codex konverzace")
+            case "downloads": String(localized: "Staré stažené soubory")
+            case "node_modules": String(localized: "Závislosti nečinných projektů")
             default: key
             }
         }
@@ -33,26 +33,26 @@ final class Sweeper {
         /// Lower-case form for "Čistím …".
         var progressName: String {
             switch key {
-            case "xcode": "Xcode build data"
-            case "docker": "Docker build cache"
-            case "codex": "Codex konverzace"
-            case "simulators": "simulátory a symboly zařízení"
+            case "xcode": String(localized: "Xcode build data")
+            case "docker": String(localized: "Docker build cache")
+            case "codex": String(localized: "Codex konverzace")
+            case "simulators": String(localized: "simulátory a symboly zařízení")
             default: title.prefix(1).lowercased() + title.dropFirst()
             }
         }
 
         var detail: String {
             switch key {
-            case "caches": "npm, pip, yarn, Go, Gradle, Cargo…"
-            case "app_caches": "Prohlížeče a aplikace. Vytvoří se znovu."
-            case "docker": "Další build bude pomalejší"
-            case "xcode": "Další build bude jednou pomalejší"
-            case "simulators": "Staré verze iOS. Stáhnou se znovu."
-            case "homebrew": "Instalační soubory starých verzí"
-            case "logs": "Starší než 30 dní"
-            case "codex": "Starší než 30 dní"
-            case "downloads": "Starší než 60 dní. Půjdou do Koše."
-            case "node_modules": "node_modules, venv… Bez změny 30+ dní"
+            case "caches": String(localized: "npm, pip, yarn, Go, Gradle, Cargo…")
+            case "app_caches": String(localized: "Prohlížeče a aplikace. Vytvoří se znovu.")
+            case "docker": String(localized: "Další build bude pomalejší")
+            case "xcode": String(localized: "Další build bude jednou pomalejší")
+            case "simulators": String(localized: "Staré verze iOS. Stáhnou se znovu.")
+            case "homebrew": String(localized: "Instalační soubory starých verzí")
+            case "logs": String(localized: "Starší než 30 dní")
+            case "codex": String(localized: "Starší než 30 dní")
+            case "downloads": String(localized: "Starší než 60 dní. Půjdou do Koše.")
+            case "node_modules": String(localized: "node_modules, venv… Bez změny 30+ dní")
             default: ""
             }
         }

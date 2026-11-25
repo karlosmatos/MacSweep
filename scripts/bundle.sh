@@ -18,6 +18,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/MacSweep "$APP/Contents/MacOS/"
 cp Resources/Info.plist "$APP/Contents/"
 cp Resources/AppIcon.icns scripts/disk-cleanup.sh "$APP/Contents/Resources/"
+cp -R Resources/*.lproj "$APP/Contents/Resources/"
 # Shortcuts actions: the system only offers App Intents listed in Contents/Resources/Metadata.appintents.
 LISTS=$(mktemp -d -t macsweep-intents)
 ls "$PWD"/Sources/MacSweep/*.swift >"$LISTS/sources"

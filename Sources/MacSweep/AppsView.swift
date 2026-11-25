@@ -38,7 +38,7 @@ final class AppsModel {
             }.value
             lastUsed = dates
         } catch {
-            phase = .failed("Seznam aplikací nejde načíst: \(error.localizedDescription)")
+            phase = .failed(String(localized: "Seznam aplikací nejde načíst: \(error.localizedDescription)"))
         }
     }
 
@@ -94,7 +94,7 @@ final class AppsModel {
                     self.phase = .done(app.name)
                     self.apps.removeAll { $0 == app }
                 } else {
-                    self.phase = .failed("Odinstalace skončila s kódem \(status.map(String.init) ?? "?").")
+                    self.phase = .failed(String(localized: "Odinstalace skončila s kódem \(status.map(String.init) ?? "?")."))
                 }
             }
         }
@@ -250,13 +250,13 @@ struct AppsView: View {
     private func phaseContent(_ app: InstalledApp) -> some View {
         switch model.phase {
         case .done(let name):
-            ResultRow(icon: "checkmark", tint: Theme.accent, title: "\(name) odinstalována",
-                      detail: "Soubory jsou v Koši, odtud je obnovíš.", actionTitle: "Otevřít Koš") {
+            ResultRow(icon: "checkmark", tint: Theme.accent, title: String(localized: "\(name) odinstalována"),
+                      detail: String(localized: "Soubory jsou v Koši, odtud je obnovíš."), actionTitle: String(localized: "Otevřít Koš")) {
                 NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash"))
             }
         case .failed(let message):
             ResultRow(icon: "exclamationmark.circle", tint: Theme.danger, title: message,
-                      detail: "Nic dalšího se nesmazalo.", actionTitle: "Zkusit znovu") { model.select(app) }
+                      detail: String(localized: "Nic dalšího se nesmazalo."), actionTitle: String(localized: "Zkusit znovu")) { model.select(app) }
         case .uninstalling:
             HStack(spacing: 10) { ProgressView().controlSize(.small); Text("Odinstalovávám \(app.name)…") }
             Text(model.log).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
@@ -308,7 +308,7 @@ struct AppsView: View {
     }
 
     private func lastUsedText(_ app: InstalledApp) -> String {
-        model.lastUsed[app.path].map { $0.formatted(.relative(presentation: .named)) } ?? "bez záznamu"
+        model.lastUsed[app.path].map { $0.formatted(.relative(presentation: .named)) } ?? String(localized: "bez záznamu")
     }
 }
 
@@ -325,7 +325,7 @@ struct AppRow: View {
                 AppIcon(path: app.path, name: app.name, size: 26)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(app.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                    Text(lastUsed.map { "Použito \($0.formatted(.relative(presentation: .named)))" } ?? "Bez záznamu o spuštění")
+                    Text(lastUsed.map { String(localized: "Použito \($0.formatted(.relative(presentation: .named)))") } ?? String(localized: "Bez záznamu o spuštění"))
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Spacer()

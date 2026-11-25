@@ -236,8 +236,8 @@ final class SystemMonitor {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { granted, _ in
             guard granted else { return }
             let content = UNMutableNotificationContent()
-            content.title = "Zbývá \(Format.gigabytes(free)) GB"
-            content.body = "Klikni na MacSweep v menu baru a uvolni místo."
+            content.title = String(localized: "Zbývá \(Format.gigabytes(free)) GB")
+            content.body = String(localized: "Klikni na MacSweep v menu baru a uvolni místo.")
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "lowDisk", content: content, trigger: nil))
         }
     }

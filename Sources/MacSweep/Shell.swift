@@ -20,7 +20,7 @@ enum Shell {
 
     /// Disk analysis and app removal run on Mole; says how to get it when it's missing.
     static var moleMissing: String? {
-        FileManager.default.isExecutableFile(atPath: mo) ? nil : "Tahle část potřebuje Mole. Nainstaluj ho v Terminálu: brew install mole"
+        FileManager.default.isExecutableFile(atPath: mo) ? nil : String(localized: "Tahle část potřebuje Mole. Nainstaluj ho v Terminálu: brew install mole")
     }
 
     static let claude: String? = {
@@ -204,7 +204,7 @@ enum Format {
         let minutes = Int(Date().timeIntervalSince(date) / 60)
         if minutes < 60 { return "\(minutes) min" }
         if minutes < 48 * 60 { return "\(minutes / 60) h \(minutes % 60) min" }
-        return "\(minutes / 1440) dní"
+        return String(localized: "\(minutes / 1440) dní")
     }
 
     /// Decimal gigabytes as a bare number, e.g. "45,5" (matches Finder's GB).

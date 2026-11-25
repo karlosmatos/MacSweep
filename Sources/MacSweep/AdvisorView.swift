@@ -18,16 +18,19 @@ final class Advisor {
     private var sessionID: String?
     private var runner: ProcessRunner?
 
-    private static let systemPrompt = """
-    Jsi poradce pro úklid a výkon macOS uvnitř aplikace MacSweep. Odpovídej česky a stručně, bez tabulek a nadpisů.
+    /// The amount Claude writes for performance advice instead of a size, in the UI language.
+    static let performanceTag = String(localized: "výkon")
+
+    private static var systemPrompt: String { """
+    Jsi poradce pro úklid a výkon macOS uvnitř aplikace MacSweep. \(String(localized: "Odpovídej česky a stručně, bez tabulek a nadpisů."))
     Máš jen nástroje ke čtení: mo status/analyze/clean --dry-run/purge --dry-run/uninstall --list/--dry-run, du, ls, Read, Glob, Grep.
     Nikdy nic nemaž. Najdi největší a nejbezpečnější úspory místa a vysvětli rizika. U výkonu komentuj RAM, swap, CPU, procesy a spouštěné položky.
     Formát: jedna úvodní věta, pak každé doporučení na samostatném řádku ve tvaru
-    "- <velikost nebo 'výkon'> | <co a proč, max 2 krátké věty> [[cil]]"
+    "- <velikost nebo '\(performanceTag)'> | <co a proč, max 2 krátké věty> [[cil]]"
     kde cil je jedno z: uklid (cache a staré soubory, tlačítko Uvolnit v menu baru), analyza (konkrétní složky),
     aplikace (odinstalace), spousteni (položky po startu a na pozadí). Seřaď podle uvolněného místa.
     Na konec můžeš přidat jednu větu o tom, co jsi nemohl zkontrolovat.
-    """
+    """ }
 
     private static let allowedTools = [
         "Read", "Glob", "Grep", "Bash(du:*)", "Bash(ls:*)",
@@ -38,12 +41,12 @@ final class Advisor {
 
     func runFullAudit() {
         send("Udělej kompletní audit mého Macu: disk (mo analyze --json, mo clean --dry-run, mo purge --dry-run), aplikace, které nepoužívám, a co se spouští po startu (sfltool dumpbtm).",
-             display: "Projdi celý Mac.")
+             display: String(localized: "Projdi celý Mac."))
     }
 
     func send(_ prompt: String, display: String? = nil) {
         guard let claude = Shell.claude else {
-            messages.append(Message(fromUser: false, text: "Nenašel jsem příkaz `claude` (~/.local/bin/claude). Poradce ho potřebuje."))
+            messages.append(Message(fromUser: false, text: String(localized: "Nenašel jsem příkaz `claude` (~/.local/bin/claude). Poradce ho potřebuje.")))
             return
         }
         guard !busy else { return }
@@ -62,7 +65,7 @@ final class Advisor {
                 let (output, status) = try await runner.run(stdin: prompt)
                 reply = parse(output, status: status)
             } catch {
-                reply = "Claude nejde spustit: \(error.localizedDescription)"
+                reply = String(localized: "Claude nejde spustit: \(error.localizedDescription)")
             }
             let seconds = startedAt.map { Int(Date().timeIntervalSince($0)) }
             messages.append(Message(fromUser: false, text: reply, seconds: seconds))
@@ -82,10 +85,10 @@ final class Advisor {
         struct Result: Decodable { let result: String?; let sessionId: String?; let isError: Bool? }
         guard let start = output.firstIndex(of: "{"),
               let result = try? snakeDecoder.decode(Result.self, from: Data(output[start...].utf8)) else {
-            return status == 15 ? "Zastaveno." : "Neočekávaná odpověď (kód \(status)):\n\(output)"
+            return status == 15 ? String(localized: "Zastaveno.") : String(localized: "Neočekávaná odpověď (kód \(status)):\n\(output)")
         }
         if let id = result.sessionId { sessionID = id }
-        return result.result ?? "(prázdná odpověď)"
+        return result.result ?? String(localized: "(prázdná odpověď)")
     }
 }
 
@@ -95,9 +98,9 @@ struct AdvisorView: View {
     @State private var input = ""
 
     private let suggestions = [
-        "Co zabírá místo v ~/Library?",
-        "Proč je Mac pomalý?",
-        "Které aplikace skoro nepoužívám?",
+        String(localized: "Co zabírá místo v ~/Library?"),
+        String(localized: "Proč je Mac pomalý?"),
+        String(localized: "Které aplikace skoro nepoužívám?"),
     ]
 
     var body: some View {
@@ -162,7 +165,7 @@ struct AdvisorView: View {
                 .lineLimit(1...4)
                 .onSubmit(submit)
             if !advisor.messages.isEmpty {
-                IconButton(icon: "arrow.counterclockwise", help: "Nová konverzace") { advisor.reset() }
+                IconButton(icon: "arrow.counterclockwise", help: String(localized: "Nová konverzace")) { advisor.reset() }
                     .disabled(advisor.busy)
             }
             Button(action: submit) {
@@ -202,7 +205,7 @@ private struct MessageView: View {
             Button("Uvolnit") { sweeper.sweep() }
             Button("Zrušit", role: .cancel) {}
         } message: {
-            Text(sweeper.selectedItems.map(\.title).joined(separator: ", ") + ". Stejné jako tlačítko v menu baru.")
+            Text(sweeper.selectedItems.map(\.title).joined(separator: ", ") + ". " + String(localized: "Stejné jako tlačítko v menu baru."))
         }
     }
 
@@ -221,7 +224,7 @@ private struct MessageView: View {
                     if let rec = Recommendation(line) {
                         HStack(alignment: .firstTextBaseline, spacing: 14) {
                             Text(rec.amount).fontWeight(.semibold).frame(width: 72, alignment: .trailing)
-                                .foregroundStyle(rec.amount == "výkon" ? .secondary : .primary)
+                                .foregroundStyle(rec.amount == Advisor.performanceTag ? .secondary : .primary)
                             Text(markdown(rec.text)).frame(maxWidth: .infinity, alignment: .leading)
                             if let target = rec.target {
                                 Button(target.title) { go(target) }.buttonStyle(SecondaryButtonStyle())
@@ -269,10 +272,10 @@ private struct Recommendation {
         case sweep, analyze, apps, startup
         var title: String {
             switch self {
-            case .sweep: "Uvolnit"
-            case .analyze: "Otevřít Analýzu"
-            case .apps: "Otevřít Aplikace"
-            case .startup: "Otevřít Spouštění"
+            case .sweep: String(localized: "Uvolnit")
+            case .analyze: String(localized: "Otevřít Analýzu")
+            case .apps: String(localized: "Otevřít Aplikace")
+            case .startup: String(localized: "Otevřít Spouštění")
             }
         }
     }

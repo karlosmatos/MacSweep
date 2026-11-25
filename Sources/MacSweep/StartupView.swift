@@ -50,7 +50,7 @@ final class StartupModel {
         result += Self.btmItems(from: btmText ?? "", disabled: Self.disabledLabels(from: disabledText ?? ""))
         items = result
         if loginText == nil || loginText?.contains("execution error") == true {
-            error = "Položky po přihlášení nejde načíst. Povol MacSweep ovládání System Events v Nastavení, Soukromí, Automatizace."
+            error = String(localized: "Položky po přihlášení nejde načíst. Povol MacSweep ovládání System Events v Nastavení, Soukromí, Automatizace.")
         }
     }
 
@@ -78,7 +78,7 @@ final class StartupModel {
         }
         let removed = UserDefaults.standard.dictionary(forKey: removedKey) as? [String: String] ?? [:]
         for (name, path) in removed.sorted(by: { $0.key < $1.key }) where !items.contains(where: { $0.name == name }) {
-            items.append(StartupItem(id: "login:" + name, kind: .loginItem, name: name, detail: "Vypnuto v MacSweep",
+            items.append(StartupItem(id: "login:" + name, kind: .loginItem, name: name, detail: String(localized: "Vypnuto v MacSweep"),
                                      appPath: path, plistPath: nil, enabled: false))
         }
         return items
@@ -203,10 +203,10 @@ struct StartupView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                PageHeader(title: "Spouštění", subtitle: summary) {
+                PageHeader(title: String(localized: "Spouštění"), subtitle: summary) {
                     HStack(spacing: 6) {
                         if model.loading { ProgressView().controlSize(.small) }
-                        IconButton(icon: "arrow.clockwise", help: "Načíst znovu") { Task { await model.load() } }
+                        IconButton(icon: "arrow.clockwise", help: String(localized: "Načíst znovu")) { Task { await model.load() } }
                     }
                 }
                 if let error = model.error {
@@ -229,12 +229,12 @@ struct StartupView: View {
 
     private var summary: String {
         let switchable = model.items.filter(\.switchable)
-        guard !switchable.isEmpty else { return "Co se samo zapne při startu Macu." }
-        return "Po startu se spustí \(switchable.filter(\.enabled).count) z \(switchable.count) položek a \(model.items.count - switchable.count) pomocníků."
+        guard !switchable.isEmpty else { return String(localized: "Co se samo zapne při startu Macu.") }
+        return String(localized: "Po startu se spustí \(switchable.filter(\.enabled).count) z \(switchable.count) položek a \(model.items.count - switchable.count) pomocníků.")
     }
 
     @ViewBuilder
-    private func group(_ title: String, _ subtitle: String, kinds: [StartupItem.Kind]) -> some View {
+    private func group(_ title: LocalizedStringKey, _ subtitle: LocalizedStringKey, kinds: [StartupItem.Kind]) -> some View {
         let items = model.items.filter { kinds.contains($0.kind) }
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
@@ -269,7 +269,7 @@ struct StartupRow: View {
                     .toggleStyle(.switch).controlSize(.small).labelsHidden().tint(Theme.accent)
                     .accessibilityLabel("Spouštět \(item.name)")
             } else {
-                Text(item.enabled ? "Zapnuto" : "Vypnuto").font(.caption).foregroundStyle(.secondary)
+                Text(item.enabled ? String(localized: "Zapnuto") : String(localized: "Vypnuto")).font(.caption).foregroundStyle(.secondary)
                 Image(systemName: "lock").font(.caption).foregroundStyle(.tertiary)
             }
         }

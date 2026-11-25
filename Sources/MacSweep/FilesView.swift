@@ -151,10 +151,10 @@ struct FilesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 14) {
-                PageHeader(title: "Velké soubory a duplicity", subtitle: subtitle) {
+                PageHeader(title: String(localized: "Velké soubory a duplicity"), subtitle: subtitle) {
                     HStack(spacing: 8) {
                         if model.loading { ProgressView().controlSize(.small) }
-                        IconButton(icon: "arrow.clockwise", help: "Znovu hledat") { Task { await model.load(force: true) } }
+                        IconButton(icon: "arrow.clockwise", help: String(localized: "Znovu hledat")) { Task { await model.load(force: true) } }
                             .keyboardShortcut("r")
                     }
                 }
@@ -172,7 +172,7 @@ struct FilesView: View {
             actionBar
         }
         .task(id: model.mode) { await model.load() }
-        .alert("Přesunout \(model.selectedFiles.count) souborů (\(Format.bytes(model.selectedFiles.reduce(0) { $0 + $1.size }))) do Koše?",
+        .alert(String(localized: "Přesunout \(Format.bytes(model.selectedFiles.reduce(0) { $0 + $1.size })) do Koše?"),
                isPresented: $confirm) {
             Button("Přesunout do Koše", role: .destructive) { Task { await model.trashSelection() } }
             Button("Zrušit", role: .cancel) {}
@@ -211,7 +211,7 @@ struct FilesView: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 1) {
                             ForEach(groups) { group in
-                                Text("\(group.files.count) kopie, \(Format.bytes(group.wasted)) navíc")
+                                Text("Kopií: \(group.files.count), navíc \(Format.bytes(group.wasted))")
                                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                                     .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
                                 ForEach(group.files) { row($0) }
@@ -229,7 +229,7 @@ struct FilesView: View {
     private var searching: some View {
         VStack(spacing: 10) {
             ProgressView()
-            Text(model.mode == .duplicates ? "Porovnávám obsah souborů…" : "Hledám…").foregroundStyle(.secondary)
+            Text(model.mode == .duplicates ? String(localized: "Porovnávám obsah souborů…") : String(localized: "Hledám…")).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -250,7 +250,7 @@ struct FilesView: View {
             if selected.isEmpty {
                 Text("Zaškrtni soubory, které chceš smazat.").foregroundStyle(.secondary)
             } else {
-                Text("\(selected.count) vybráno, \(Format.bytes(selected.reduce(0) { $0 + $1.size }))").fontWeight(.semibold)
+                Text("Vybráno: \(selected.count), \(Format.bytes(selected.reduce(0) { $0 + $1.size }))").fontWeight(.semibold)
             }
             Spacer()
             if model.mode == .duplicates, !(model.groups ?? []).isEmpty {
