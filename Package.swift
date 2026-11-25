@@ -14,6 +14,7 @@ let package = Package(
             path: "Sources/MacSweep",
             // Sparkle.framework is copied into Contents/Frameworks by scripts/bundle.sh.
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
-        )
+        ),
+        .testTarget(name: "MacSweepTests", dependencies: ["MacSweep"], path: "Tests/MacSweepTests")
     ]
 )
