@@ -176,8 +176,12 @@ func onMain(_ work: @escaping @MainActor () -> Void) {
 }
 
 enum Format {
+    /// "0 KB", not the formatter's "Zero KB".
     static func bytes(_ value: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.allowsNonnumericFormatting = false
+        return formatter.string(fromByteCount: value)
     }
 
     /// Bytes per second, e.g. "1,2 MB/s".

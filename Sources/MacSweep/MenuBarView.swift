@@ -400,7 +400,8 @@ struct DetailList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let details = sweeper.details[key] {
+            if let all = sweeper.details[key] {
+                let details = all.filter { $0.bytes > 0 }
                 ForEach(details.prefix(Self.limit)) { detail in
                     DetailRow(detail: detail, selected: !sweeper.isExcluded(detail), disabled: disabled) {
                         sweeper.toggleExcluded(detail)
@@ -436,7 +437,7 @@ struct DetailRow: View {
                 Image(systemName: selected ? "checkmark.square.fill" : "square")
                     .font(.system(size: 12))
                     .foregroundStyle(selected ? Theme.accent : .secondary)
-                Text((detail.path as NSString).abbreviatingWithTildeInPath)
+                Text(shortPath)
                     .font(.caption).lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 8)
                 Text(Format.bytes(detail.bytes)).font(Theme.number(11, weight: .regular)).foregroundStyle(.secondary)
@@ -448,8 +449,13 @@ struct DetailRow: View {
         .buttonStyle(PressableStyle())
         .disabled(disabled)
         .onHover { hovered = $0 }
-        .help(detail.path)
+        .help((detail.path as NSString).abbreviatingWithTildeInPath)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// Last two parts, which tell items apart ("Slack/Cache", "my-app/node_modules"); the full path is the tooltip.
+    private var shortPath: String {
+        URL(fileURLWithPath: detail.path).pathComponents.suffix(2).joined(separator: "/")
     }
 }
 

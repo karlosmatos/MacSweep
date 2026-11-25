@@ -40,16 +40,16 @@ final class Sweeper {
 
         var detail: String {
             switch key {
-            case "caches": "npm, pip, yarn, pnpm, Go, Gradle, Cargo"
-            case "app_caches": "Prohlížeče, Spotify, Slack, VS Code. Vytvoří se znovu."
-            case "docker": "Mezivrstvy buildů. Další build bude pomalejší."
+            case "caches": "npm, pip, yarn, Go, Gradle, Cargo…"
+            case "app_caches": "Prohlížeče a aplikace. Vytvoří se znovu."
+            case "docker": "Další build bude pomalejší"
             case "xcode": "Další build bude jednou pomalejší"
-            case "simulators": "Bez runtimu a starší verze iOS. Stáhnou se znovu."
+            case "simulators": "Staré verze iOS. Stáhnou se znovu."
             case "homebrew": "Instalační soubory starých verzí"
             case "logs": "Starší než 30 dní"
             case "codex": "Starší než 30 dní"
             case "downloads": "Starší než 60 dní. Půjdou do Koše."
-            case "node_modules": "node_modules, venv, Rust target. Bez změny 30+ dní."
+            case "node_modules": "node_modules, venv… Bez změny 30+ dní"
             default: ""
             }
         }
