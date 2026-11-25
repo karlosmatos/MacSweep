@@ -17,11 +17,12 @@ final class Sweeper {
             case "app_caches": "Cache aplikací"
             case "docker": "Docker build cache"
             case "xcode": "Xcode build data"
+            case "simulators": "Simulátory a symboly zařízení"
             case "homebrew": "Stažené balíčky Homebrew"
             case "logs": "Staré logy"
             case "codex": "Staré Codex konverzace"
             case "downloads": "Staré stažené soubory"
-            case "node_modules": "Nepoužívané node_modules"
+            case "node_modules": "Závislosti nečinných projektů"
             default: key
             }
         }
@@ -32,21 +33,23 @@ final class Sweeper {
             case "xcode": "Xcode build data"
             case "docker": "Docker build cache"
             case "codex": "Codex konverzace"
+            case "simulators": "simulátory a symboly zařízení"
             default: title.prefix(1).lowercased() + title.dropFirst()
             }
         }
 
         var detail: String {
             switch key {
-            case "caches": "npm, bun, uv, prisma"
+            case "caches": "npm, pip, yarn, pnpm, Go, Gradle, Cargo"
             case "app_caches": "Prohlížeče, Spotify, Slack, VS Code. Vytvoří se znovu."
             case "docker": "Mezivrstvy buildů. Další build bude pomalejší."
             case "xcode": "Další build bude jednou pomalejší"
+            case "simulators": "Bez runtimu a starší verze iOS. Stáhnou se znovu."
             case "homebrew": "Instalační soubory starých verzí"
             case "logs": "Starší než 30 dní"
             case "codex": "Starší než 30 dní"
             case "downloads": "Starší než 60 dní. Půjdou do Koše."
-            case "node_modules": "Projekty bez změny 30+ dní"
+            case "node_modules": "node_modules, venv, Rust target. Bez změny 30+ dní."
             default: ""
             }
         }
@@ -57,6 +60,7 @@ final class Sweeper {
             case "app_caches": "square.stack.3d.up"
             case "docker": "cube"
             case "xcode": "hammer"
+            case "simulators": "iphone"
             case "homebrew": "mug"
             case "logs": "doc.text"
             case "codex": "bubble.left.and.text.bubble.right"
