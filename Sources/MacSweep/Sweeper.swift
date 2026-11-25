@@ -6,6 +6,9 @@ import Observation
 @MainActor
 @Observable
 final class Sweeper {
+    /// One instance for the app and its Shortcuts actions.
+    static let shared = Sweeper()
+
     struct Item: Identifiable, Equatable {
         let key: String
         let bytes: Int64
@@ -194,6 +197,15 @@ final class Sweeper {
     }
 
     func sweep() {
+        Task { await sweepAndWait() }
+    }
+
+    /// Sweeps the ticked categories and returns the bytes freed; nil when it failed or one was already running.
+    /// Scans first when nothing has been scanned yet (a Shortcuts run right after launch).
+    @discardableResult
+    func sweepAndWait() async -> Int64? {
+        guard phase != .running else { return nil }
+        if lastScan == nil { await scanNow() }
         let before = items
         let swept = Set(selectedItems.map(\.key))
         let trashed = swept.contains("downloads")
@@ -201,27 +213,26 @@ final class Sweeper {
         try? "".write(to: progress, atomically: true, encoding: .utf8)
         phase = .running
         current = selectedItems.first?.key
-        Task {
-            let poll = Task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(300))
-                    let key = (try? String(contentsOf: progress, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if let key, !key.isEmpty { current = key }
-                }
-            }
-            let runner = ProcessRunner("/usr/bin/env", ["DISK_CLEANUP_NO_REPORT=1", "DISK_CLEANUP_PROGRESS=\(progress.path)", "/bin/bash", Self.script])
-            let status = (try? await runner.run().status) ?? -1
-            poll.cancel()
-            await scanNow()
-            current = nil
-            if status == 0 {
-                let freed = Self.freed(before: before, after: items, swept: swept)
-                record(freed)
-                phase = .done(freed: freed, trashed: trashed)
-            } else {
-                phase = .failed("Úklid skončil s chybou (kód \(status)).")
+        let poll = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(300))
+                let key = (try? String(contentsOf: progress, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let key, !key.isEmpty { current = key }
             }
         }
+        let runner = ProcessRunner("/usr/bin/env", ["DISK_CLEANUP_NO_REPORT=1", "DISK_CLEANUP_PROGRESS=\(progress.path)", "/bin/bash", Self.script])
+        let status = (try? await runner.run().status) ?? -1
+        poll.cancel()
+        await scanNow()
+        current = nil
+        guard status == 0 else {
+            phase = .failed(String(localized: "Úklid skončil s chybou (kód \(status))."))
+            return nil
+        }
+        let freed = Self.freed(before: before, after: items, swept: swept)
+        record(freed)
+        phase = .done(freed: freed, trashed: trashed)
+        return freed
     }
 
     func dismissResult() { phase = .idle }

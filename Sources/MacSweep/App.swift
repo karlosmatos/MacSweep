@@ -40,7 +40,7 @@ struct MacSweepApp: App {
     @State private var monitor = SystemMonitor()
     @State private var state = AppState()
     @State private var advisor = Advisor()
-    @State private var sweeper = Sweeper()
+    @State private var sweeper = Sweeper.shared
     @State private var growth = FolderGrowth()
 
     var body: some Scene {
