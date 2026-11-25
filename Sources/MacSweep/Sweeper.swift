@@ -121,22 +121,37 @@ final class Sweeper {
     }
 
     func scan() {
+        Task { await scanNow() }
+    }
+
+    private func scanNow() async {
         scanning = true
-        Task {
-            let output = (try? await ProcessRunner.output("/usr/bin/nice", ["-n", "10", "/bin/bash", Self.script, "--dry-run"])) ?? ""
-            items = output.split(separator: "\n").compactMap { line in
-                let parts = line.split(separator: "\t")
-                guard parts.count == 2, let bytes = Int64(parts[1]) else { return nil }
-                return Item(key: String(parts[0]), bytes: bytes)
-            }
-            lastScan = Date()
-            scanning = false
+        let output = (try? await ProcessRunner.output("/usr/bin/nice", ["-n", "10", "/bin/bash", Self.script, "--dry-run"])) ?? ""
+        items = Self.parseScan(output)
+        lastScan = Date()
+        scanning = false
+    }
+
+    /// Lines of "<category>\t<bytes>" from the script's --dry-run.
+    static func parseScan(_ output: String) -> [Item] {
+        output.split(separator: "\n").compactMap { line in
+            let parts = line.split(separator: "\t")
+            guard parts.count == 2, let bytes = Int64(parts[1]) else { return nil }
+            return Item(key: String(parts[0]), bytes: bytes)
         }
     }
 
+    /// What the swept categories shrank by. Downloads only move to the Trash, so they free nothing yet.
+    static func freed(before: [Item], after: [Item], swept: Set<String>) -> Int64 {
+        let remaining = Dictionary(after.map { ($0.key, $0.bytes) }, uniquingKeysWith: { $1 })
+        return before.filter { swept.contains($0.key) && $0.key != "downloads" }
+            .reduce(0) { $0 + max($1.bytes - (remaining[$1.key] ?? 0), 0) }
+    }
+
     func sweep() {
-        let before = Sensors.disk()?.free ?? 0
-        let trashed = selectedItems.contains { $0.key == "downloads" }
+        let before = items
+        let swept = Set(selectedItems.map(\.key))
+        let trashed = swept.contains("downloads")
         let progress = FileManager.default.temporaryDirectory.appendingPathComponent("macsweep-progress")
         try? "".write(to: progress, atomically: true, encoding: .utf8)
         phase = .running
@@ -152,15 +167,15 @@ final class Sweeper {
             let runner = ProcessRunner("/usr/bin/env", ["DISK_CLEANUP_NO_REPORT=1", "DISK_CLEANUP_PROGRESS=\(progress.path)", "/bin/bash", Self.script])
             let status = (try? await runner.run().status) ?? -1
             poll.cancel()
+            await scanNow()
             current = nil
-            let freed = max((Sensors.disk()?.free ?? before) - before, 0)
             if status == 0 {
+                let freed = Self.freed(before: before, after: items, swept: swept)
                 record(freed)
                 phase = .done(freed: freed, trashed: trashed)
             } else {
                 phase = .failed("Úklid skončil s chybou (kód \(status)).")
             }
-            scan()
         }
     }
 
