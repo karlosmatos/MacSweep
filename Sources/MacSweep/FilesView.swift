@@ -29,7 +29,8 @@ final class FilesModel {
     static let duplicateMinimum: Int64 = 10_000_000
     private static let home = FileManager.default.homeDirectoryForCurrentUser.path
 
-    var mode: Mode = .large
+    /// Switching lists clears the selection, so the Trash button never acts on files that are not on screen.
+    var mode: Mode = .large { didSet { if mode != oldValue { selection = [] } } }
     private(set) var large: [File]?
     private(set) var groups: [Group]?
     var selection: Set<String> = []
@@ -37,9 +38,8 @@ final class FilesModel {
     var error: String?
 
     var selectedFiles: [File] {
-        let all = (large ?? []) + (groups ?? []).flatMap(\.files)
-        var seen = Set<String>()
-        return all.filter { selection.contains($0.path) && seen.insert($0.path).inserted }
+        let shown = mode == .large ? large ?? [] : (groups ?? []).flatMap(\.files)
+        return shown.filter { selection.contains($0.path) }
     }
 
     func load(force: Bool = false) async {
