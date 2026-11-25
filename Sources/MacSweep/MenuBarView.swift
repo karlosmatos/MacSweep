@@ -6,6 +6,7 @@ struct MenuBarView: View {
     @Environment(Sweeper.self) private var sweeper
     @Environment(AppState.self) private var state
     @Environment(Advisor.self) private var advisor
+    @Environment(FolderGrowth.self) private var growth
     @Environment(\.openWindow) private var openWindow
     @State private var hovered: String?
     @State private var openVital: Vital?
@@ -56,6 +57,10 @@ struct MenuBarView: View {
                     Text("GB volno").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
                 }
                 Text("z \(Format.gigabytes(monitor.diskTotal)) GB na Macintosh HD").font(.caption).foregroundStyle(.secondary)
+                if let days = daysLeft, let perDay = monitor.history.perDay {
+                    Text("Ubývá \(Format.bytes(Int64(-perDay))) denně, dojde za ~\(days) dní")
+                        .font(.caption).foregroundStyle(days < 30 ? Theme.warn : .secondary)
+                }
             }
             Spacer()
             moreMenu
@@ -110,6 +115,19 @@ struct MenuBarView: View {
             WarningRow(icon: "thermometer.high", tint: Theme.danger, title: "Mac se přehřívá a zpomaluje",
                        detail: heatDetail, action: monitor.topCPU.first.map { top in ("Ukončit \(top.name)", { monitor.quit(top) }) })
         }
+        if let top = growth.grown.first {
+            WarningRow(icon: "arrow.up.right", tint: Theme.warn,
+                       title: "\((top.path as NSString).abbreviatingWithTildeInPath) narostla o \(Format.bytes(top.bytes))",
+                       detail: "Za poslední den.",
+                       action: ("Ukázat", {
+                           NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: top.path)])
+                           growth.dismiss()
+                       }))
+        }
+        if !monitor.lowDisk, let days = daysLeft, days < 14 {
+            WarningRow(icon: "chart.line.downtrend.xyaxis", tint: Theme.warn, title: "Místo dojde asi za \(days) dní",
+                       detail: "Při tempu posledních dvou týdnů.", action: ("Rozebrat s Poradcem", { askAdvisorAboutDisk() }))
+        }
         if monitor.lowDisk {
             WarningRow(icon: "externaldrive.badge.exclamationmark", tint: Theme.warn, title: "Dochází místo",
                        detail: "Pod 25 GB macOS zpomaluje a nestihne aktualizace.",
@@ -126,6 +144,8 @@ struct MenuBarView: View {
                        action: nil)
         }
     }
+
+    private var daysLeft: Int? { DiskHistory.daysLeft(free: monitor.diskFree, perDay: monitor.history.perDay) }
 
     private var heatDetail: String {
         var parts: [String] = []

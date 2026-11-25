@@ -22,6 +22,7 @@ final class SystemMonitor {
     private(set) var diskFree: Int64 = 0
     private(set) var diskTotal: Int64 = 0
     private(set) var trash: Int64 = 0
+    let history = DiskHistory()
     // CPU and heat
     private(set) var cpuPercent = 0
     private(set) var load = 0.0
@@ -135,6 +136,7 @@ final class SystemMonitor {
         if let disk = Sensors.disk() {
             diskFree = disk.free
             diskTotal = disk.total
+            history.record(disk.free)
             notifyIfLowDisk()
         }
         if let ticks = Sensors.cpuTicks() {

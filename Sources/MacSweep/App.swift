@@ -1,4 +1,5 @@
 import AppKit
+import Charts
 import Sparkle
 import SwiftUI
 
@@ -38,6 +39,7 @@ struct MacSweepApp: App {
     @State private var state = AppState()
     @State private var advisor = Advisor()
     @State private var sweeper = Sweeper()
+    @State private var growth = FolderGrowth()
 
     var body: some Scene {
         MenuBarExtra {
@@ -46,6 +48,7 @@ struct MacSweepApp: App {
                 .environment(state)
                 .environment(sweeper)
                 .environment(advisor)
+                .environment(growth)
         } label: {
             MenuBarLabel(monitor: monitor)
         }
@@ -148,6 +151,7 @@ struct MainView: View {
                 SidebarRow(section: section, selected: state.section == section) { state.section = section }
             }
             Spacer()
+            FreeSpaceChart(history: monitor.history).padding(.horizontal, 10).padding(.bottom, 6)
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(Format.gigabytes(monitor.diskFree)) GB volno z \(Format.gigabytes(monitor.diskTotal)) GB")
                 if sweeper.totalReclaimed > 0, let since = sweeper.since {
@@ -172,6 +176,34 @@ struct MainView: View {
         case .apps: AppsView()
         case .startup: StartupView()
         case .advisor: AdvisorView()
+        }
+    }
+}
+
+/// Free space over the last 30 days, with the daily trend once there is enough data.
+struct FreeSpaceChart: View {
+    let history: DiskHistory
+
+    var body: some View {
+        if history.samples.count >= 2 {
+            VStack(alignment: .leading, spacing: 4) {
+                Chart(history.samples, id: \.date) { sample in
+                    AreaMark(x: .value("Den", sample.date), y: .value("Volno", Double(sample.free) / 1e9))
+                        .foregroundStyle(Theme.accent.opacity(0.15))
+                    LineMark(x: .value("Den", sample.date), y: .value("Volno", Double(sample.free) / 1e9))
+                        .foregroundStyle(Theme.accent)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5))
+                }
+                .chartXAxis(.hidden)
+                .chartYAxis(.hidden)
+                .chartYScale(domain: .automatic(includesZero: false))
+                .frame(height: 36)
+                .accessibilityLabel("Volné místo za posledních 30 dní")
+                if let perDay = history.perDay {
+                    Text(perDay < 0 ? "Ubývá \(Format.bytes(Int64(-perDay))) denně" : "Přibývá \(Format.bytes(Int64(perDay))) denně")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
         }
     }
 }
