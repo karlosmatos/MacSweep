@@ -4,12 +4,13 @@ import Sparkle
 import SwiftUI
 
 enum Section: String, CaseIterable, Identifiable {
-    case analyze, apps, startup, advisor
+    case analyze, files, apps, startup, advisor
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .analyze: "Analýza disku"
+        case .files: "Soubory"
         case .apps: "Aplikace"
         case .startup: "Spouštění"
         case .advisor: "Poradce"
@@ -19,6 +20,7 @@ enum Section: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .analyze: "chart.pie"
+        case .files: "doc.on.doc"
         case .apps: "square.grid.2x2"
         case .startup: "power"
         case .advisor: "text.bubble"
@@ -173,6 +175,7 @@ struct MainView: View {
     private func detail(for section: Section) -> some View {
         switch section {
         case .analyze: AnalyzeView()
+        case .files: FilesView()
         case .apps: AppsView()
         case .startup: StartupView()
         case .advisor: AdvisorView()
