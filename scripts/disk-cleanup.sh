@@ -2,6 +2,7 @@
 # Disk cleanup. Bundled in MacSweep.app, which runs it on demand and every Sunday at 10:00.
 #   --dry-run   print "<category>\t<bytes>" for what would be removed, change nothing
 # Categories listed one per line in ~/.config/disk-cleanup/skip are left alone (MacSweep writes it).
+# ~/.config/disk-cleanup/projects lists folders searched for stale node_modules, one per line (MacSweep writes it).
 # DISK_CLEANUP_PROGRESS=<file>: the category being cleaned is written there (MacSweep shows it).
 # Log: ~/Library/Logs/disk-cleanup/cleanup.log
 set -u
@@ -12,6 +13,7 @@ DRY=0
 LOW_SPACE_GB=25
 LOG_DIR="$HOME/Library/Logs/disk-cleanup"
 SKIP_FILE="$HOME/.config/disk-cleanup/skip"
+PROJECTS_FILE="$HOME/.config/disk-cleanup/projects"
 mkdir -p "$LOG_DIR"
 [ $DRY = 0 ] && exec >>"$LOG_DIR/cleanup.log" 2>&1
 
@@ -52,8 +54,12 @@ elif clean caches; then
   echo "caches cleaned"
 fi
 
-# App caches (Chrome, Spotify). Emptied, not removed, so running apps can keep writing.
-APP_CACHES=("$HOME/Library/Caches/Google" "$HOME/Library/Caches/com.spotify.client")
+# App caches (browsers, Spotify, Electron apps). Emptied, not removed, so running apps can keep writing.
+APP_CACHES=("$HOME/Library/Caches/Google" "$HOME/Library/Caches/Firefox" "$HOME/Library/Caches/BraveSoftware"
+  "$HOME/Library/Caches/Microsoft Edge" "$HOME/Library/Caches/com.operasoftware.Opera" "$HOME/Library/Caches/com.spotify.client")
+for app in Slack discord Code Notion; do
+  for c in Cache "Code Cache" GPUCache; do APP_CACHES+=("$HOME/Library/Application Support/$app/$c"); done
+done
 if [ $DRY = 1 ]; then
   report app_caches "$(existing "${APP_CACHES[@]}" | size_of)"
 elif clean app_caches; then
@@ -113,9 +119,13 @@ elif clean downloads; then
   trash_paths ${files[@]+"${files[@]}"}
 fi
 
-# node_modules of projects in ~/Github without file changes for 30 days
+# node_modules of projects in the folders from $PROJECTS_FILE without file changes for 30 days
+project_dirs() {
+  [ -f "$PROJECTS_FILE" ] || return 0
+  while IFS= read -r d; do [ -n "$d" ] && [ -d "$d" ] && printf '%s\0' "$d"; done <"$PROJECTS_FILE"
+}
 stale_node_modules() {
-  find "$HOME/Github" -maxdepth 4 -type d -name node_modules -not -path '*/.next/*' -prune -print0 |
+  project_dirs | xargs -0 -I{} find {} -maxdepth 4 -type d -name node_modules -not -path '*/.next/*' -prune -print0 |
     while IFS= read -r -d '' nm; do
       project=$(dirname "$nm")
       recent=$(find "$project" \( -name node_modules -o -name .git -o -name .next \) -prune \

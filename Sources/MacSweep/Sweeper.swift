@@ -2,7 +2,7 @@ import AppKit
 import Observation
 
 /// Drives the bundled disk-cleanup.sh: previews what it would free, runs it (on demand and weekly),
-/// keeps a lifetime tally and remembers unticked categories in a skip file the script reads.
+/// keeps a lifetime tally and remembers unticked categories and project folders in files the script reads.
 @MainActor
 @Observable
 final class Sweeper {
@@ -37,7 +37,7 @@ final class Sweeper {
         var detail: String {
             switch key {
             case "caches": "npm, bun, uv, prisma, Docker build"
-            case "app_caches": "Chrome, Spotify. Vytvoří se znovu."
+            case "app_caches": "Prohlížeče, Spotify, Slack, VS Code. Vytvoří se znovu."
             case "xcode": "Další build bude jednou pomalejší"
             case "homebrew": "Instalační soubory starých verzí"
             case "logs": "Starší než 30 dní"
@@ -69,6 +69,10 @@ final class Sweeper {
     /// Bundled with the app; the repo copy is the fallback for `swift run`.
     private static let script = Bundle.main.path(forResource: "disk-cleanup", ofType: "sh") ?? home + "/.local/bin/disk-cleanup.sh"
     private static let skipFile = home + "/.config/disk-cleanup/skip"
+    private static let projectsFile = home + "/.config/disk-cleanup/projects"
+    /// Usual places for code; the ones that exist become the starting list of project folders.
+    private static let defaultProjectFolders = ["Github", "GitHub", "Developer", "Projects", "Code", "dev", "src", "repos"]
+        .map { home + "/" + $0 }
 
     var items: [Item] = []
     var scanning = false
@@ -76,6 +80,8 @@ final class Sweeper {
     var current: String?
     private(set) var autoEnabled = UserDefaults.standard.bool(forKey: "autoSweep")
     private(set) var skipped: Set<String> = Sweeper.loadSkipped()
+    /// Folders searched for stale node_modules.
+    private(set) var projectFolders: [String] = Sweeper.loadProjectFolders()
     private(set) var totalReclaimed = Int64(UserDefaults.standard.integer(forKey: "reclaimedTotal"))
     private(set) var since = UserDefaults.standard.object(forKey: "reclaimedSince") as? Date
     private(set) var lastScan: Date?
@@ -91,6 +97,16 @@ final class Sweeper {
     func toggle(_ item: Item) {
         if skipped.contains(item.key) { skipped.remove(item.key) } else { skipped.insert(item.key) }
         saveSkipped()
+    }
+
+    func addProjectFolders(_ urls: [URL]) {
+        projectFolders = Array(Set(projectFolders + urls.map(\.path))).sorted()
+        saveProjectFolders()
+    }
+
+    func removeProjectFolder(_ path: String) {
+        projectFolders.removeAll { $0 == path }
+        saveProjectFolders()
     }
 
     /// Rescans at most every 5 minutes; called whenever the popover opens. Old results stay visible meanwhile.
@@ -209,8 +225,34 @@ final class Sweeper {
     }
 
     private func saveSkipped() {
-        let url = URL(fileURLWithPath: Self.skipFile)
+        Self.writeLines(skipped.sorted(), to: Self.skipFile)
+    }
+
+    /// The saved list; on first launch the default folders that exist, saved so the script sees them too.
+    private static func loadProjectFolders() -> [String] {
+        if let text = try? String(contentsOfFile: projectsFile, encoding: .utf8) {
+            return text.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
+        }
+        // Compare canonical paths: on a case-insensitive disk ~/Github and ~/GitHub are the same folder.
+        var seen = Set<String>()
+        let found = defaultProjectFolders.filter { path in
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { return false }
+            return seen.insert(URL(fileURLWithPath: path).resolvingSymlinksInPath().standardized.path.lowercased()).inserted
+        }
+        writeLines(found, to: projectsFile)
+        return found
+    }
+
+    private func saveProjectFolders() {
+        Self.writeLines(projectFolders, to: Self.projectsFile)
+        lastScan = nil
+        scan()
+    }
+
+    private static func writeLines(_ lines: [String], to path: String) {
+        let url = URL(fileURLWithPath: path)
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? (skipped.sorted().joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        try? (lines.map { $0 + "\n" }.joined()).write(to: url, atomically: true, encoding: .utf8)
     }
 }
