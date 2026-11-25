@@ -50,8 +50,23 @@ if [ $DRY = 1 ]; then
   report caches "$(existing "${CACHES[@]}" | size_of)"
 elif clean caches; then
   rm -rf "${CACHES[@]}"
-  docker info >/dev/null 2>&1 && docker builder prune -af >/dev/null 2>&1
   echo "caches cleaned"
+fi
+
+# Docker build cache, only when Docker (or OrbStack) is running
+docker_build_cache() {
+  docker info >/dev/null 2>&1 || { echo 0; return; }
+  docker system df --format '{{.Type}}\t{{.Size}}' 2>/dev/null | LC_ALL=C awk -F'\t' '$1 == "Build Cache" {
+    n = $2 + 0; u = $2; sub(/^[0-9.]+/, "", u)
+    m = (u == "kB") ? 1e3 : (u == "MB") ? 1e6 : (u == "GB") ? 1e9 : (u == "TB") ? 1e12 : 1
+    printf "%.0f", n * m; found = 1
+  } END { if (!found) print 0 }'
+}
+if [ $DRY = 1 ]; then
+  report docker "$(docker_build_cache)"
+elif clean docker; then
+  docker info >/dev/null 2>&1 && docker builder prune -af >/dev/null 2>&1
+  echo "docker build cache pruned"
 fi
 
 # App caches (browsers, Spotify, Electron apps). Emptied, not removed, so running apps can keep writing.

@@ -15,6 +15,7 @@ final class Sweeper {
             switch key {
             case "caches": "Cache vývojářských nástrojů"
             case "app_caches": "Cache aplikací"
+            case "docker": "Docker build cache"
             case "xcode": "Xcode build data"
             case "homebrew": "Stažené balíčky Homebrew"
             case "logs": "Staré logy"
@@ -29,6 +30,7 @@ final class Sweeper {
         var progressName: String {
             switch key {
             case "xcode": "Xcode build data"
+            case "docker": "Docker build cache"
             case "codex": "Codex konverzace"
             default: title.prefix(1).lowercased() + title.dropFirst()
             }
@@ -36,8 +38,9 @@ final class Sweeper {
 
         var detail: String {
             switch key {
-            case "caches": "npm, bun, uv, prisma, Docker build"
+            case "caches": "npm, bun, uv, prisma"
             case "app_caches": "Prohlížeče, Spotify, Slack, VS Code. Vytvoří se znovu."
+            case "docker": "Mezivrstvy buildů. Další build bude pomalejší."
             case "xcode": "Další build bude jednou pomalejší"
             case "homebrew": "Instalační soubory starých verzí"
             case "logs": "Starší než 30 dní"
@@ -52,6 +55,7 @@ final class Sweeper {
             switch key {
             case "caches": "shippingbox"
             case "app_caches": "square.stack.3d.up"
+            case "docker": "cube"
             case "xcode": "hammer"
             case "homebrew": "mug"
             case "logs": "doc.text"
