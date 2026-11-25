@@ -21,6 +21,17 @@ notify() { osascript -e "display notification \"$1\" with title \"MacSweep\""; }
 size_of() { xargs -0 du -sk 2>/dev/null | awk '{s+=$1} END {print s*1024+0}'; }
 report() { printf '%s\t%s\n' "$1" "$2"; }
 existing() { for p in "$@"; do [ -n "$p" ] && [ -e "$p" ] && printf '%s\0' "$p"; done; }
+# Moves the given paths to the Trash (recoverable). NSFileManager via JXA: /usr/bin/trash needs macOS 15.
+trash_paths() {
+  [ $# -gt 0 ] || return 0
+  osascript -l JavaScript -e 'function run(argv) {
+    ObjC.import("Foundation")
+    argv.forEach(p => {
+      const ok = $.NSFileManager.defaultManager.trashItemAtURLResultingItemURLError($.NSURL.fileURLWithPath(p), null, null)
+      console.log((ok ? "trashed: " : "failed to trash: ") + p)
+    })
+  }' "$@"
+}
 # True when this category should be cleaned now; also announces it to MacSweep.
 clean() {
   if grep -qx "$1" "$SKIP_FILE" 2>/dev/null; then echo "skipped: $1"; return 1; fi
@@ -97,7 +108,9 @@ old_downloads() { find "$HOME/Downloads" -mindepth 1 -maxdepth 1 ! -name '.*' -m
 if [ $DRY = 1 ]; then
   report downloads "$(old_downloads | size_of)"
 elif clean downloads; then
-  old_downloads | while IFS= read -r -d '' f; do trash "$f" && echo "trashed: $f"; done
+  files=()
+  while IFS= read -r -d '' f; do files+=("$f"); done < <(old_downloads)
+  trash_paths ${files[@]+"${files[@]}"}
 fi
 
 # node_modules of projects in ~/Github without file changes for 30 days
