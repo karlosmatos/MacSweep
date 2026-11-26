@@ -6,6 +6,7 @@ struct MenuBarView: View {
     @Environment(Sweeper.self) private var sweeper
     @Environment(AppState.self) private var state
     @Environment(Advisor.self) private var advisor
+    @Environment(FolderGrowth.self) private var growth
     @Environment(\.openWindow) private var openWindow
     @State private var hovered: String?
     @State private var openVital: Vital?
@@ -56,6 +57,10 @@ struct MenuBarView: View {
                     Text("GB volno").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
                 }
                 Text("z \(Format.gigabytes(monitor.diskTotal)) GB na Macintosh HD").font(.caption).foregroundStyle(.secondary)
+                if let days = daysLeft, let perDay = monitor.history.perDay {
+                    Text("Ubývá \(Format.bytes(Int64(-perDay))) denně, dojde za ~\(days) dní")
+                        .font(.caption).foregroundStyle(days < 30 ? Theme.warn : .secondary)
+                }
             }
             Spacer()
             moreMenu
@@ -107,31 +112,46 @@ struct MenuBarView: View {
     @ViewBuilder
     private var warnings: some View {
         if monitor.overheating {
-            WarningRow(icon: "thermometer.high", tint: Theme.danger, title: "Mac se přehřívá a zpomaluje",
-                       detail: heatDetail, action: monitor.topCPU.first.map { top in ("Ukončit \(top.name)", { monitor.quit(top) }) })
+            WarningRow(icon: "thermometer.high", tint: Theme.danger, title: String(localized: "Mac se přehřívá a zpomaluje"),
+                       detail: heatDetail, action: monitor.topCPU.first.map { top in (String(localized: "Ukončit \(top.name)"), { monitor.quit(top) }) })
+        }
+        if let top = growth.grown.first {
+            WarningRow(icon: "arrow.up.right", tint: Theme.warn,
+                       title: String(localized: "\((top.path as NSString).abbreviatingWithTildeInPath) narostla o \(Format.bytes(top.bytes))"),
+                       detail: String(localized: "Za poslední den."),
+                       action: (String(localized: "Ukázat"), {
+                           NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: top.path)])
+                           growth.dismiss()
+                       }))
+        }
+        if !monitor.lowDisk, let days = daysLeft, days < 14 {
+            WarningRow(icon: "chart.line.downtrend.xyaxis", tint: Theme.warn, title: String(localized: "Místo dojde asi za \(days) dní"),
+                       detail: String(localized: "Při tempu posledních dvou týdnů."), action: (String(localized: "Rozebrat s Poradcem"), { askAdvisorAboutDisk() }))
         }
         if monitor.lowDisk {
-            WarningRow(icon: "externaldrive.badge.exclamationmark", tint: Theme.warn, title: "Dochází místo",
-                       detail: "Pod 25 GB macOS zpomaluje a nestihne aktualizace.",
-                       action: ("Rozebrat s Poradcem", { askAdvisorAboutDisk() }))
+            WarningRow(icon: "externaldrive.badge.exclamationmark", tint: Theme.warn, title: String(localized: "Dochází místo"),
+                       detail: String(localized: "Pod 25 GB macOS zpomaluje a nestihne aktualizace."),
+                       action: (String(localized: "Rozebrat s Poradcem"), { askAdvisorAboutDisk() }))
         } else if monitor.cpuAlert, !monitor.overheating, let top = monitor.topCPU.first {
-            WarningRow(icon: "cpu", tint: Theme.warn, title: "Procesor \(monitor.cpuPercent) % déle než minutu",
-                       detail: "Nejvíc bere \(top.name).", action: ("Ukončit", { monitor.quit(top) }))
+            WarningRow(icon: "cpu", tint: Theme.warn, title: String(localized: "Procesor \(monitor.cpuPercent) % déle než minutu"),
+                       detail: String(localized: "Nejvíc bere \(top.name)."), action: (String(localized: "Ukončit"), { monitor.quit(top) }))
         }
         if let boot = monitor.bootDate, Date().timeIntervalSince(boot) > 14 * 86_400 {
-            WarningRow(icon: "power", tint: Theme.warn, title: "Zapnuto \(Int(Date().timeIntervalSince(boot) / 86_400)) dní",
+            WarningRow(icon: "power", tint: Theme.warn, title: String(localized: "Zapnuto \(Int(Date().timeIntervalSince(boot) / 86_400)) dní"),
                        detail: (monitor.memory?.swap ?? 0) > 1_000_000_000
-                           ? "Swap \(Format.bytes(monitor.memory?.swap ?? 0)). Restart uvolní paměť."
-                           : "Restart uvolní paměť a dokončí čekající aktualizace.",
+                           ? String(localized: "Swap \(Format.bytes(monitor.memory?.swap ?? 0)). Restart uvolní paměť.")
+                           : String(localized: "Restart uvolní paměť a dokončí čekající aktualizace."),
                        action: nil)
         }
     }
 
+    private var daysLeft: Int? { DiskHistory.daysLeft(free: monitor.diskFree, perDay: monitor.history.perDay) }
+
     private var heatDetail: String {
         var parts: [String] = []
         if let t = monitor.temperature { parts.append("CPU \(Int(t)) °C") }
-        if let rpm = monitor.fanRPM, rpm > 0 { parts.append("ventilátor \(rpm.formatted()) ot./min") }
-        if let top = monitor.topCPU.first { parts.append("nejvíc topí \(top.name)") }
+        if let rpm = monitor.fanRPM, rpm > 0 { parts.append(String(localized: "ventilátor \(rpm.formatted()) ot./min")) }
+        if let top = monitor.topCPU.first { parts.append(String(localized: "nejvíc topí \(top.name)")) }
         return parts.joined(separator: ", ").capitalizedFirst + "."
     }
 
@@ -142,19 +162,19 @@ struct MenuBarView: View {
         switch sweeper.phase {
         case .done(let freed, let trashed):
             ResultRow(icon: "checkmark", tint: Theme.accent,
-                      title: freed > 0 ? "Uvolněno \(Format.bytes(freed))" : "Hotovo",
-                      detail: trashed ? "Stažené soubory jsou v Koši. Místo se vrátí po vysypání." : "Další automatický úklid v neděli v 10:00.",
-                      actionTitle: "OK", action: sweeper.dismissResult)
+                      title: freed > 0 ? String(localized: "Uvolněno \(Format.bytes(freed))") : String(localized: "Hotovo"),
+                      detail: trashed ? String(localized: "Stažené soubory jsou v Koši. Místo se vrátí po vysypání.") : String(localized: "Další automatický úklid v neděli v 10:00."),
+                      actionTitle: String(localized: "OK"), action: sweeper.dismissResult)
         case .failed(let message):
             ResultRow(icon: "exclamationmark.circle", tint: Theme.danger, title: message,
-                      detail: "Co se nepovedlo, je v logu.", actionTitle: "Ukázat log", action: Sweeper.openLog)
+                      detail: String(localized: "Co se nepovedlo, je v logu."), actionTitle: String(localized: "Ukázat log"), action: Sweeper.openLog)
         default:
             if sweeper.items.isEmpty && sweeper.scanning {
                 SkeletonList()
             } else if sweeper.visibleItems.isEmpty {
-                ResultRow(icon: "checkmark", tint: Theme.accent, title: "Není co uvolnit",
-                          detail: "Víc místa najdeš v Analýze disku nebo mezi nepoužívanými aplikacemi.",
-                          actionTitle: "Analýza", action: { open(.analyze) })
+                ResultRow(icon: "checkmark", tint: Theme.accent, title: String(localized: "Není co uvolnit"),
+                          detail: String(localized: "Víc místa najdeš v Analýze disku nebo mezi nepoužívanými aplikacemi."),
+                          actionTitle: String(localized: "Analýza"), action: { open(.analyze) })
             } else {
                 VStack(spacing: 0) {
                     ForEach(sweeper.visibleItems) { item in
@@ -234,7 +254,7 @@ struct MenuBarView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = true
         panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
-        panel.message = "Vyber složky, ve kterých máš projekty. MacSweep v nich hledá nepoužívané node_modules."
+        panel.message = String(localized: "Vyber složky, ve kterých máš projekty. MacSweep v nich hledá nepoužívané node_modules.")
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK else { return }
         sweeper.addProjectFolders(panel.urls)
@@ -243,7 +263,7 @@ struct MenuBarView: View {
     private func askAdvisorAboutDisk() {
         open(.advisor)
         advisor.send("Na disku zbývá jen \(Format.gigabytes(monitor.diskFree)) GB. Najdi, co zabírá nejvíc místa, a navrhni bezpečný úklid.",
-                     display: "Proč mi dochází místo na disku?")
+                     display: String(localized: "Proč mi dochází místo na disku?"))
     }
 
     private func emptyTrash() {
@@ -380,7 +400,7 @@ struct ReclaimRow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(PressableStyle())
-                .accessibilityLabel(expanded ? "Skrýt položky" : "Ukázat položky")
+                .accessibilityLabel(expanded ? String(localized: "Skrýt položky") : String(localized: "Ukázat položky"))
             } else {
                 Color.clear.frame(width: 20, height: 28)
             }

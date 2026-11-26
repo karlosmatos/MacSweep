@@ -33,7 +33,7 @@ final class AnalyzeModel {
             cache[key] = decoded
             if (current ?? "/") == key { result = decoded; readDates(decoded) }
         } catch {
-            self.error = "Analýza selhala: \(error.localizedDescription)"
+            self.error = String(localized: "Analýza selhala: \(error.localizedDescription)")
         }
     }
 
@@ -66,7 +66,7 @@ final class AnalyzeModel {
         }
         cache.removeAll()
         await load(force: true)
-        if !failures.isEmpty { error = "Do Koše nešlo přesunout: \(failures.joined(separator: ", "))." }
+        if !failures.isEmpty { error = String(localized: "Do Koše nešlo přesunout: \(failures.joined(separator: ", ")).") }
     }
 }
 
@@ -91,13 +91,13 @@ struct AnalyzeView: View {
             Button("Přesunout do Koše", role: .destructive) { Task { await model.trashSelection() } }
             Button("Zrušit", role: .cancel) {}
         } message: {
-            Text(model.selectedEntries.map(\.name).joined(separator: ", ") + ". Obnovíš je z Koše.")
+            Text(model.selectedEntries.map(\.name).joined(separator: ", ") + ". " + String(localized: "Obnovíš je z Koše."))
         }
     }
 
     private var confirmTitle: String {
         let size = Format.bytes(model.selectedEntries.reduce(0) { $0 + $1.size })
-        return "Přesunout \(model.selectedEntries.count == 1 ? "1 položku" : "\(model.selectedEntries.count) položky") (\(size)) do Koše?"
+        return String(localized: "Přesunout \(size) do Koše?")
     }
 
     // MARK: Toolbar with breadcrumb
@@ -123,8 +123,8 @@ struct AnalyzeView: View {
             .lineLimit(1)
             Spacer()
             if model.loading { ProgressView().controlSize(.small) }
-            IconButton(icon: "house", help: "Domovská složka") { Task { await model.open(home) } }
-            IconButton(icon: "arrow.clockwise", help: "Znovu naskenovat") { Task { await model.load(force: true) } }
+            IconButton(icon: "house", help: String(localized: "Domovská složka")) { Task { await model.open(home) } }
+            IconButton(icon: "arrow.clockwise", help: String(localized: "Znovu naskenovat")) { Task { await model.load(force: true) } }
                 .keyboardShortcut("r")
         }
         .font(.system(size: 13))
@@ -132,8 +132,8 @@ struct AnalyzeView: View {
 
     private var crumbs: [String] {
         model.stack.map { path in
-            guard let path else { return "Celý Mac" }
-            if path == home { return "Domov" }
+            guard let path else { return String(localized: "Celý Mac") }
+            if path == home { return String(localized: "Domov") }
             return (path as NSString).lastPathComponent
         }
     }
@@ -200,7 +200,7 @@ struct AnalyzeView: View {
             if selected.isEmpty {
                 Text("Zaškrtni složky nebo soubory, které chceš smazat.").foregroundStyle(.secondary)
             } else {
-                Text("\(selected.count == 1 ? "1 vybraná" : "\(selected.count) vybrané"), \(Format.bytes(selected.reduce(0) { $0 + $1.size }))")
+                Text("Vybráno: \(selected.count), \(Format.bytes(selected.reduce(0) { $0 + $1.size }))")
                     .fontWeight(.semibold)
             }
             Spacer()
@@ -284,7 +284,7 @@ struct AnalyzeRow: View {
         .onHover { hovered = $0 }
         .contextMenu {
             Button("Ukázat ve Finderu") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: entry.path)]) }
-            Button(selected ? "Zrušit výběr" : "Vybrat", action: toggle)
+            Button(selected ? String(localized: "Zrušit výběr") : String(localized: "Vybrat"), action: toggle)
         }
     }
 }

@@ -77,7 +77,7 @@ struct QuitButton: View {
     let title: String
     let action: () -> Void
 
-    init(_ title: String = "Ukončit", action: @escaping () -> Void) {
+    init(_ title: String = String(localized: "Ukončit"), action: @escaping () -> Void) {
         self.title = title
         self.action = action
     }

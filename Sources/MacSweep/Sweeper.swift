@@ -6,6 +6,9 @@ import Observation
 @MainActor
 @Observable
 final class Sweeper {
+    /// One instance for the app and its Shortcuts actions.
+    static let shared = Sweeper()
+
     struct Item: Identifiable, Equatable {
         let key: String
         let bytes: Int64
@@ -13,16 +16,16 @@ final class Sweeper {
 
         var title: String {
             switch key {
-            case "caches": "Cache vývojářských nástrojů"
-            case "app_caches": "Cache aplikací"
-            case "docker": "Docker build cache"
-            case "xcode": "Xcode build data"
-            case "simulators": "Simulátory a symboly zařízení"
-            case "homebrew": "Stažené balíčky Homebrew"
-            case "logs": "Staré logy"
-            case "codex": "Staré Codex konverzace"
-            case "downloads": "Staré stažené soubory"
-            case "node_modules": "Závislosti nečinných projektů"
+            case "caches": String(localized: "Cache vývojářských nástrojů")
+            case "app_caches": String(localized: "Cache aplikací")
+            case "docker": String(localized: "Docker build cache")
+            case "xcode": String(localized: "Xcode build data")
+            case "simulators": String(localized: "Simulátory a symboly zařízení")
+            case "homebrew": String(localized: "Stažené balíčky Homebrew")
+            case "logs": String(localized: "Staré logy")
+            case "codex": String(localized: "Staré Codex konverzace")
+            case "downloads": String(localized: "Staré stažené soubory")
+            case "node_modules": String(localized: "Závislosti nečinných projektů")
             default: key
             }
         }
@@ -30,26 +33,26 @@ final class Sweeper {
         /// Lower-case form for "Čistím …".
         var progressName: String {
             switch key {
-            case "xcode": "Xcode build data"
-            case "docker": "Docker build cache"
-            case "codex": "Codex konverzace"
-            case "simulators": "simulátory a symboly zařízení"
+            case "xcode": String(localized: "Xcode build data")
+            case "docker": String(localized: "Docker build cache")
+            case "codex": String(localized: "Codex konverzace")
+            case "simulators": String(localized: "simulátory a symboly zařízení")
             default: title.prefix(1).lowercased() + title.dropFirst()
             }
         }
 
         var detail: String {
             switch key {
-            case "caches": "npm, pip, yarn, Go, Gradle, Cargo…"
-            case "app_caches": "Prohlížeče a aplikace. Vytvoří se znovu."
-            case "docker": "Další build bude pomalejší"
-            case "xcode": "Další build bude jednou pomalejší"
-            case "simulators": "Staré verze iOS. Stáhnou se znovu."
-            case "homebrew": "Instalační soubory starých verzí"
-            case "logs": "Starší než 30 dní"
-            case "codex": "Starší než 30 dní"
-            case "downloads": "Starší než 60 dní. Půjdou do Koše."
-            case "node_modules": "node_modules, venv… Bez změny 30+ dní"
+            case "caches": String(localized: "npm, pip, yarn, Go, Gradle, Cargo…")
+            case "app_caches": String(localized: "Prohlížeče a aplikace. Vytvoří se znovu.")
+            case "docker": String(localized: "Další build bude pomalejší")
+            case "xcode": String(localized: "Další build bude jednou pomalejší")
+            case "simulators": String(localized: "Staré verze iOS. Stáhnou se znovu.")
+            case "homebrew": String(localized: "Instalační soubory starých verzí")
+            case "logs": String(localized: "Starší než 30 dní")
+            case "codex": String(localized: "Starší než 30 dní")
+            case "downloads": String(localized: "Starší než 60 dní. Půjdou do Koše.")
+            case "node_modules": String(localized: "node_modules, venv… Bez změny 30+ dní")
             default: ""
             }
         }
@@ -194,6 +197,15 @@ final class Sweeper {
     }
 
     func sweep() {
+        Task { await sweepAndWait() }
+    }
+
+    /// Sweeps the ticked categories and returns the bytes freed; nil when it failed or one was already running.
+    /// Scans first when nothing has been scanned yet (a Shortcuts run right after launch).
+    @discardableResult
+    func sweepAndWait() async -> Int64? {
+        guard phase != .running else { return nil }
+        if lastScan == nil { await scanNow() }
         let before = items
         let swept = Set(selectedItems.map(\.key))
         let trashed = swept.contains("downloads")
@@ -201,27 +213,26 @@ final class Sweeper {
         try? "".write(to: progress, atomically: true, encoding: .utf8)
         phase = .running
         current = selectedItems.first?.key
-        Task {
-            let poll = Task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(300))
-                    let key = (try? String(contentsOf: progress, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if let key, !key.isEmpty { current = key }
-                }
-            }
-            let runner = ProcessRunner("/usr/bin/env", ["DISK_CLEANUP_NO_REPORT=1", "DISK_CLEANUP_PROGRESS=\(progress.path)", "/bin/bash", Self.script])
-            let status = (try? await runner.run().status) ?? -1
-            poll.cancel()
-            await scanNow()
-            current = nil
-            if status == 0 {
-                let freed = Self.freed(before: before, after: items, swept: swept)
-                record(freed)
-                phase = .done(freed: freed, trashed: trashed)
-            } else {
-                phase = .failed("Úklid skončil s chybou (kód \(status)).")
+        let poll = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(300))
+                let key = (try? String(contentsOf: progress, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let key, !key.isEmpty { current = key }
             }
         }
+        let runner = ProcessRunner("/usr/bin/env", ["DISK_CLEANUP_NO_REPORT=1", "DISK_CLEANUP_PROGRESS=\(progress.path)", "/bin/bash", Self.script])
+        let status = (try? await runner.run().status) ?? -1
+        poll.cancel()
+        await scanNow()
+        current = nil
+        guard status == 0 else {
+            phase = .failed(String(localized: "Úklid skončil s chybou (kód \(status))."))
+            return nil
+        }
+        let freed = Self.freed(before: before, after: items, swept: swept)
+        record(freed)
+        phase = .done(freed: freed, trashed: trashed)
+        return freed
     }
 
     func dismissResult() { phase = .idle }

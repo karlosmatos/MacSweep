@@ -1,23 +1,26 @@
 import AppKit
+import Charts
 import Sparkle
 import SwiftUI
 
 enum Section: String, CaseIterable, Identifiable {
-    case analyze, apps, startup, advisor
+    case analyze, files, apps, startup, advisor
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .analyze: "Analýza disku"
-        case .apps: "Aplikace"
-        case .startup: "Spouštění"
-        case .advisor: "Poradce"
+        case .analyze: String(localized: "Analýza disku")
+        case .files: String(localized: "Soubory")
+        case .apps: String(localized: "Aplikace")
+        case .startup: String(localized: "Spouštění")
+        case .advisor: String(localized: "Poradce")
         }
     }
 
     var icon: String {
         switch self {
         case .analyze: "chart.pie"
+        case .files: "doc.on.doc"
         case .apps: "square.grid.2x2"
         case .startup: "power"
         case .advisor: "text.bubble"
@@ -37,7 +40,8 @@ struct MacSweepApp: App {
     @State private var monitor = SystemMonitor()
     @State private var state = AppState()
     @State private var advisor = Advisor()
-    @State private var sweeper = Sweeper()
+    @State private var sweeper = Sweeper.shared
+    @State private var growth = FolderGrowth()
 
     var body: some Scene {
         MenuBarExtra {
@@ -46,6 +50,7 @@ struct MacSweepApp: App {
                 .environment(state)
                 .environment(sweeper)
                 .environment(advisor)
+                .environment(growth)
         } label: {
             MenuBarLabel(monitor: monitor)
         }
@@ -148,6 +153,7 @@ struct MainView: View {
                 SidebarRow(section: section, selected: state.section == section) { state.section = section }
             }
             Spacer()
+            FreeSpaceChart(history: monitor.history).padding(.horizontal, 10).padding(.bottom, 6)
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(Format.gigabytes(monitor.diskFree)) GB volno z \(Format.gigabytes(monitor.diskTotal)) GB")
                 if sweeper.totalReclaimed > 0, let since = sweeper.since {
@@ -169,9 +175,40 @@ struct MainView: View {
     private func detail(for section: Section) -> some View {
         switch section {
         case .analyze: AnalyzeView()
+        case .files: FilesView()
         case .apps: AppsView()
         case .startup: StartupView()
         case .advisor: AdvisorView()
+        }
+    }
+}
+
+/// Free space over the last 30 days, with the daily trend once there is enough data.
+struct FreeSpaceChart: View {
+    let history: DiskHistory
+
+    var body: some View {
+        if history.samples.count >= 2 {
+            VStack(alignment: .leading, spacing: 4) {
+                Chart(history.samples, id: \.date) { sample in
+                    AreaMark(x: .value("Den", sample.date), y: .value("Volno", Double(sample.free) / 1e9))
+                        .foregroundStyle(Theme.accent.opacity(0.15))
+                    LineMark(x: .value("Den", sample.date), y: .value("Volno", Double(sample.free) / 1e9))
+                        .foregroundStyle(Theme.accent)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5))
+                }
+                .chartXAxis(.hidden)
+                .chartYAxis(.hidden)
+                .chartYScale(domain: .automatic(includesZero: false))
+                .frame(height: 36)
+                .accessibilityLabel("Volné místo za posledních 30 dní")
+                if let perDay = history.perDay {
+                    Group {
+                        if perDay < 0 { Text("Ubývá \(Format.bytes(Int64(-perDay))) denně") } else { Text("Přibývá \(Format.bytes(Int64(perDay))) denně") }
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
+                }
+            }
         }
     }
 }

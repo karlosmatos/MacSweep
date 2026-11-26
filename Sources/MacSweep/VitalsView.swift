@@ -50,32 +50,32 @@ struct VitalsGrid: View {
         switch vital {
         case .temperature:
             let t = monitor.temperature ?? 0
-            let fan = monitor.fanRPM.map { $0 > 0 ? "Ventilátor \($0.formatted())" : "Ventilátor stojí" } ?? "Bez ventilátoru"
-            return Reading(label: "Teplota CPU", value: "\(Int(t.rounded())) °C", detail: fan,
+            let fan = monitor.fanRPM.map { $0 > 0 ? String(localized: "Ventilátor \($0.formatted())") : String(localized: "Ventilátor stojí") } ?? String(localized: "Bez ventilátoru")
+            return Reading(label: String(localized: "Teplota CPU"), value: "\(Int(t.rounded())) °C", detail: fan,
                            tint: t >= 95 ? Theme.danger : t >= 85 ? Theme.warn : nil)
         case .cpu:
-            return Reading(label: "Procesor", value: "\(monitor.cpuPercent) %",
-                           detail: "Zátěž \(monitor.load.formatted(.number.precision(.fractionLength(1)))) z \(Sensors.coreCount)",
+            return Reading(label: String(localized: "Procesor"), value: "\(monitor.cpuPercent) %",
+                           detail: String(localized: "Zátěž \(monitor.load.formatted(.number.precision(.fractionLength(1)))) z \(Sensors.coreCount)"),
                            tint: monitor.cpuAlert ? Theme.warn : nil)
         case .memory:
             let mem = monitor.memory
             let swap = mem.map { $0.swap > 0 ? "swap \(Format.bytes($0.swap))" : "swap 0" } ?? ""
-            return Reading(label: "Paměť", value: "\(Format.memoryGB(mem?.used ?? 0)) GB",
-                           detail: "z \(Format.memoryGB(mem?.total ?? 0)), \(swap)",
+            return Reading(label: String(localized: "Paměť"), value: "\(Format.memoryGB(mem?.used ?? 0)) GB",
+                           detail: String(localized: "z \(Format.memoryGB(mem?.total ?? 0)), \(swap)"),
                            tint: (mem?.pressure ?? 0) > 80 ? Theme.warn : nil)
         case .battery:
             let b = monitor.battery
             let detail = b.map { b in
-                if b.charging { return "Nabíjí se" }
-                if b.onAC { return "Na nabíječce" }
-                return b.minutesLeft.map { "\($0 / 60):\(String(format: "%02d", $0 % 60)) zbývá" } ?? "Počítám…"
+                if b.charging { return String(localized: "Nabíjí se") }
+                if b.onAC { return String(localized: "Na nabíječce") }
+                return b.minutesLeft.map { String(localized: "\("\($0 / 60):\(String(format: "%02d", $0 % 60))") zbývá") } ?? String(localized: "Počítám…")
             } ?? ""
-            return Reading(label: "Baterie", value: "\(b?.percent ?? 0) %", detail: detail,
+            return Reading(label: String(localized: "Baterie"), value: "\(b?.percent ?? 0) %", detail: detail,
                            tint: (b?.percent ?? 100) <= 15 && b?.onAC == false ? Theme.danger : nil)
         case .network:
-            return Reading(label: "Síť", value: Format.rate(monitor.downRate), detail: monitor.interface ?? "Offline")
+            return Reading(label: String(localized: "Síť"), value: Format.rate(monitor.downRate), detail: monitor.interface ?? String(localized: "Offline"))
         case .uptime:
-            return Reading(label: "Zapnuto", value: Format.duration(since: monitor.bootDate), detail: "\(monitor.processCount) procesů")
+            return Reading(label: String(localized: "Zapnuto"), value: Format.duration(since: monitor.bootDate), detail: String(localized: "\(monitor.processCount) procesů"))
         }
     }
 }
@@ -110,7 +110,7 @@ struct VitalDetail: View {
             if let max = history.max() { Text("max \(Int(max.rounded())) °C").font(.caption).foregroundStyle(.secondary) }
         }
         Sparkline(values: history, ceiling: 100).frame(height: 56)
-        if let rpm = monitor.fanRPM { KeyValue("Ventilátor", rpm > 0 ? "\(rpm.formatted()) ot./min" : "Stojí") }
+        if let rpm = monitor.fanRPM { KeyValue("Ventilátor", rpm > 0 ? String(localized: "\(rpm.formatted()) ot./min") : String(localized: "Stojí")) }
         KeyValue("Omezení výkonu", throttleText)
         if let top = monitor.topCPU.first { KeyValue("Nejvíc topí", top.name) }
     }
@@ -130,8 +130,8 @@ struct VitalDetail: View {
                 Text("Pořadí aplikací podle spotřeby se začne počítat po odpojení nabíječky.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            if let health = b.healthPercent { KeyValue("Kapacita", "\(health) % původní") }
-            if let cycles = b.cycles { KeyValue("Cykly nabití", "\(cycles) z 1000") }
+            if let health = b.healthPercent { KeyValue("Kapacita", String(localized: "\(health) % původní")) }
+            if let cycles = b.cycles { KeyValue("Cykly nabití", String(localized: "\(cycles) z 1000")) }
             if let watts = b.watts, !b.onAC { KeyValue("Odběr teď", "\(watts.formatted(.number.precision(.fractionLength(1)))) W") }
             if let temp = b.temperature { KeyValue("Teplota baterie", "\(Int(temp.rounded())) °C") }
         }
@@ -141,9 +141,9 @@ struct VitalDetail: View {
     private var network: some View {
         KeyValue("Stahování", Format.rate(monitor.downRate))
         KeyValue("Odesílání", Format.rate(monitor.upRate))
-        KeyValue("Připojení", monitor.interface ?? "Žádné")
+        KeyValue("Připojení", monitor.interface ?? String(localized: "Žádné"))
         if let ip = monitor.ip { KeyValue("Lokální IP", ip) }
-        KeyValue("VPN nebo tunel", monitor.vpn ? "Zapnuto" : "Vypnuto")
+        KeyValue("VPN nebo tunel", monitor.vpn ? String(localized: "Zapnuto") : String(localized: "Vypnuto"))
     }
 
     @ViewBuilder
@@ -158,16 +158,16 @@ struct VitalDetail: View {
 
     private var pressureText: String {
         let p = monitor.memory?.pressure ?? 0
-        return p > 80 ? "Vysoký" : p > 60 ? "Střední" : "Nízký"
+        return p > 80 ? String(localized: "Vysoký") : p > 60 ? String(localized: "Střední") : String(localized: "Nízký")
     }
 
     private var throttleText: String {
         switch monitor.thermalState {
-        case .nominal: "Žádné"
-        case .fair: "Mírné"
-        case .serious: "Výkon je snížený"
-        case .critical: "Silné"
-        @unknown default: "Neznámé"
+        case .nominal: String(localized: "Žádné")
+        case .fair: String(localized: "Mírné")
+        case .serious: String(localized: "Výkon je snížený")
+        case .critical: String(localized: "Silné")
+        @unknown default: String(localized: "Neznámé")
         }
     }
 }
@@ -176,7 +176,7 @@ struct VitalDetail: View {
 struct UsageList: View {
     @Environment(SystemMonitor.self) private var monitor
     let items: [SystemMonitor.AppUsage]
-    let empty: String
+    let empty: LocalizedStringKey
     let format: (Double) -> String
 
     var body: some View {
@@ -211,9 +211,9 @@ private struct UsageRow: View {
 }
 
 struct KeyValue: View {
-    let key: String
+    let key: LocalizedStringKey
     let value: String
-    init(_ key: String, _ value: String) { self.key = key; self.value = value }
+    init(_ key: LocalizedStringKey, _ value: String) { self.key = key; self.value = value }
 
     var body: some View {
         HStack {
