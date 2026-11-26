@@ -21,6 +21,12 @@ struct SweeperTests {
         #expect(Sweeper.freed(before: before, after: [], swept: ["node_modules"]) == 2_000)
     }
 
+    @Test func parsesListBiggestFirstKeepingTabsAndSpacesInPaths() {
+        let details = Sweeper.parseList("100\t/a/small\n5000\t/b/iPhone15,2 17.0 (21A)\nnot a line\n300\t/c/odd\tname\n")
+        #expect(details.map(\.path) == ["/b/iPhone15,2 17.0 (21A)", "/c/odd\tname", "/a/small"])
+        #expect(details.map(\.bytes) == [5_000, 300, 100])
+    }
+
     @Test func trashedDownloadsFreeNothing() {
         let before = [Sweeper.Item(key: "downloads", bytes: 5_000)]
         #expect(Sweeper.freed(before: before, after: [], swept: ["downloads"]) == 0)

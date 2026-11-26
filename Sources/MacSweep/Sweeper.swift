@@ -2,7 +2,7 @@ import AppKit
 import Observation
 
 /// Drives the bundled disk-cleanup.sh: previews what it would free, runs it (on demand and weekly),
-/// keeps a lifetime tally and remembers unticked categories and project folders in files the script reads.
+/// keeps a lifetime tally and remembers unticked categories, unticked paths and project folders in files the script reads.
 @MainActor
 @Observable
 final class Sweeper {
@@ -17,11 +17,12 @@ final class Sweeper {
             case "app_caches": "Cache aplikací"
             case "docker": "Docker build cache"
             case "xcode": "Xcode build data"
+            case "simulators": "Simulátory a symboly zařízení"
             case "homebrew": "Stažené balíčky Homebrew"
             case "logs": "Staré logy"
             case "codex": "Staré Codex konverzace"
             case "downloads": "Staré stažené soubory"
-            case "node_modules": "Nepoužívané node_modules"
+            case "node_modules": "Závislosti nečinných projektů"
             default: key
             }
         }
@@ -32,21 +33,23 @@ final class Sweeper {
             case "xcode": "Xcode build data"
             case "docker": "Docker build cache"
             case "codex": "Codex konverzace"
+            case "simulators": "simulátory a symboly zařízení"
             default: title.prefix(1).lowercased() + title.dropFirst()
             }
         }
 
         var detail: String {
             switch key {
-            case "caches": "npm, bun, uv, prisma"
-            case "app_caches": "Prohlížeče, Spotify, Slack, VS Code. Vytvoří se znovu."
-            case "docker": "Mezivrstvy buildů. Další build bude pomalejší."
+            case "caches": "npm, pip, yarn, Go, Gradle, Cargo…"
+            case "app_caches": "Prohlížeče a aplikace. Vytvoří se znovu."
+            case "docker": "Další build bude pomalejší"
             case "xcode": "Další build bude jednou pomalejší"
+            case "simulators": "Staré verze iOS. Stáhnou se znovu."
             case "homebrew": "Instalační soubory starých verzí"
             case "logs": "Starší než 30 dní"
             case "codex": "Starší než 30 dní"
             case "downloads": "Starší než 60 dní. Půjdou do Koše."
-            case "node_modules": "Projekty bez změny 30+ dní"
+            case "node_modules": "node_modules, venv… Bez změny 30+ dní"
             default: ""
             }
         }
@@ -57,6 +60,7 @@ final class Sweeper {
             case "app_caches": "square.stack.3d.up"
             case "docker": "cube"
             case "xcode": "hammer"
+            case "simulators": "iphone"
             case "homebrew": "mug"
             case "logs": "doc.text"
             case "codex": "bubble.left.and.text.bubble.right"
@@ -65,6 +69,16 @@ final class Sweeper {
             default: "doc"
             }
         }
+
+        /// Path-based categories can list their items; Docker and Homebrew clean themselves.
+        var expandable: Bool { key != "docker" && key != "homebrew" }
+    }
+
+    /// One item of a category, from the script's --list.
+    struct Detail: Identifiable, Equatable {
+        let path: String
+        let bytes: Int64
+        var id: String { path }
     }
 
     enum Phase: Equatable { case idle, running, done(freed: Int64, trashed: Bool), failed(String) }
@@ -74,6 +88,7 @@ final class Sweeper {
     private static let script = Bundle.main.path(forResource: "disk-cleanup", ofType: "sh") ?? home + "/.local/bin/disk-cleanup.sh"
     private static let skipFile = home + "/.config/disk-cleanup/skip"
     private static let projectsFile = home + "/.config/disk-cleanup/projects"
+    private static let excludeFile = home + "/.config/disk-cleanup/exclude"
     /// Usual places for code; the ones that exist become the starting list of project folders.
     private static let defaultProjectFolders = ["Github", "GitHub", "Developer", "Projects", "Code", "dev", "src", "repos"]
         .map { home + "/" + $0 }
@@ -83,7 +98,11 @@ final class Sweeper {
     var phase: Phase = .idle
     var current: String?
     private(set) var autoEnabled = UserDefaults.standard.bool(forKey: "autoSweep")
-    private(set) var skipped: Set<String> = Sweeper.loadSkipped()
+    private(set) var skipped: Set<String> = Sweeper.loadLines(skipFile)
+    /// Single paths the user unticked inside a category.
+    private(set) var excluded: Set<String> = Sweeper.loadLines(excludeFile)
+    /// Items per category, loaded when a category is expanded; cleared by every scan.
+    private(set) var details: [String: [Detail]] = [:]
     /// Folders searched for stale node_modules.
     private(set) var projectFolders: [String] = Sweeper.loadProjectFolders()
     private(set) var totalReclaimed = Int64(UserDefaults.standard.integer(forKey: "reclaimedTotal"))
@@ -101,6 +120,31 @@ final class Sweeper {
     func toggle(_ item: Item) {
         if skipped.contains(item.key) { skipped.remove(item.key) } else { skipped.insert(item.key) }
         saveSkipped()
+    }
+
+    func isExcluded(_ detail: Detail) -> Bool { excluded.contains(detail.path) }
+
+    /// Ticks or unticks one path, then rescans so the category total follows.
+    func toggleExcluded(_ detail: Detail) {
+        if excluded.contains(detail.path) { excluded.remove(detail.path) } else { excluded.insert(detail.path) }
+        Self.writeLines(excluded.sorted(), to: Self.excludeFile)
+        lastScan = nil
+        scan()
+    }
+
+    func loadDetails(_ key: String) async {
+        let output = (try? await ProcessRunner.output("/usr/bin/nice", ["-n", "10", "/bin/bash", Self.script, "--list", key])) ?? ""
+        details[key] = Self.parseList(output)
+    }
+
+    /// Lines of "<bytes>\t<path>" from the script's --list, biggest first.
+    static func parseList(_ output: String) -> [Detail] {
+        output.split(separator: "\n").compactMap { line in
+            let parts = line.split(separator: "\t", maxSplits: 1)
+            guard parts.count == 2, let bytes = Int64(parts[0]) else { return nil }
+            return Detail(path: String(parts[1]), bytes: bytes)
+        }
+        .sorted { $0.bytes > $1.bytes }
     }
 
     func addProjectFolders(_ urls: [URL]) {
@@ -128,6 +172,7 @@ final class Sweeper {
         scanning = true
         let output = (try? await ProcessRunner.output("/usr/bin/nice", ["-n", "10", "/bin/bash", Self.script, "--dry-run"])) ?? ""
         items = Self.parseScan(output)
+        details = [:]
         lastScan = Date()
         scanning = false
     }
@@ -238,9 +283,9 @@ final class Sweeper {
         UserDefaults.standard.set(since, forKey: "reclaimedSince")
     }
 
-    private static func loadSkipped() -> Set<String> {
-        let text = (try? String(contentsOfFile: skipFile, encoding: .utf8)) ?? ""
-        return Set(text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+    private static func loadLines(_ path: String) -> Set<String> {
+        let text = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+        return Set(text.split(separator: "\n").map(String.init).filter { !$0.isEmpty })
     }
 
     private func saveSkipped() {

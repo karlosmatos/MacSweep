@@ -9,6 +9,7 @@ struct MenuBarView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var hovered: String?
     @State private var openVital: Vital?
+    @State private var expanded: String?
     @State private var confirmTrash = false
     @State private var contentHeight: CGFloat = 0
 
@@ -157,10 +158,16 @@ struct MenuBarView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(sweeper.visibleItems) { item in
-                        ReclaimRow(item: item, selected: sweeper.isSelected(item), disabled: sweeper.phase == .running) {
+                        ReclaimRow(item: item, selected: sweeper.isSelected(item), disabled: sweeper.phase == .running,
+                                   expanded: item.expandable ? expanded == item.key : nil) {
                             sweeper.toggle(item)
+                        } expand: {
+                            withAnimation(.snappy(duration: 0.25)) { expanded = expanded == item.key ? nil : item.key }
                         }
                         .onHover { hovered = $0 ? item.key : (hovered == item.key ? nil : hovered) }
+                        if expanded == item.key {
+                            DetailList(key: item.key, disabled: sweeper.phase == .running || !sweeper.isSelected(item))
+                        }
                     }
                 }
                 .padding(.horizontal, -6)
@@ -337,31 +344,118 @@ struct ReclaimRow: View {
     let item: Sweeper.Item
     let selected: Bool
     let disabled: Bool
+    /// nil when the category has nothing to list.
+    let expanded: Bool?
+    let toggle: () -> Void
+    let expand: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button(action: toggle) {
+                HStack(spacing: 10) {
+                    Image(systemName: selected ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 14))
+                        .foregroundStyle(selected ? Theme.accent : .secondary)
+                    Image(systemName: item.icon).font(.system(size: 13)).foregroundStyle(.secondary).frame(width: 18)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(item.title).font(.system(size: 13, weight: .medium))
+                        Text(item.detail).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text(Format.bytes(item.bytes)).font(Theme.number(13, weight: .medium))
+                }
+                .opacity(selected ? 1 : 0.55)
+            }
+            .buttonStyle(PressableStyle())
+            .disabled(disabled)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            if let expanded {
+                Button(action: expand) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                        .frame(width: 20, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressableStyle())
+                .accessibilityLabel(expanded ? "Skrýt položky" : "Ukázat položky")
+            } else {
+                Color.clear.frame(width: 20, height: 28)
+            }
+        }
+        .padding(.leading, 10).padding(.trailing, 4).padding(.vertical, 7)
+        .background(hovered ? Theme.fill : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onHover { hovered = $0 }
+    }
+}
+
+/// The biggest items of an expanded category, each of which can be unticked.
+struct DetailList: View {
+    let key: String
+    let disabled: Bool
+    @Environment(Sweeper.self) private var sweeper
+    private static let limit = 8
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let all = sweeper.details[key] {
+                let details = all.filter { $0.bytes > 0 }
+                ForEach(details.prefix(Self.limit)) { detail in
+                    DetailRow(detail: detail, selected: !sweeper.isExcluded(detail), disabled: disabled) {
+                        sweeper.toggleExcluded(detail)
+                    }
+                }
+                if details.count > Self.limit {
+                    let rest = details.dropFirst(Self.limit)
+                    Text("a dalších \(rest.count) (\(Format.bytes(rest.reduce(0) { $0 + $1.bytes })))")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .padding(.leading, 34).padding(.vertical, 4)
+                }
+            } else {
+                ProgressView().controlSize(.small).padding(.leading, 34).padding(.vertical, 6)
+            }
+        }
+        .padding(.bottom, 4)
+        .task(id: sweeper.details[key] == nil) {
+            if sweeper.details[key] == nil { await sweeper.loadDetails(key) }
+        }
+    }
+}
+
+struct DetailRow: View {
+    let detail: Sweeper.Detail
+    let selected: Bool
+    let disabled: Bool
     let toggle: () -> Void
     @State private var hovered = false
 
     var body: some View {
         Button(action: toggle) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: selected ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 14))
+                    .font(.system(size: 12))
                     .foregroundStyle(selected ? Theme.accent : .secondary)
-                Image(systemName: item.icon).font(.system(size: 13)).foregroundStyle(.secondary).frame(width: 18)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(item.title).font(.system(size: 13, weight: .medium))
-                    Text(item.detail).font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text(Format.bytes(item.bytes)).font(Theme.number(13, weight: .medium))
+                Text(shortPath)
+                    .font(.caption).lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: 8)
+                Text(Format.bytes(detail.bytes)).font(Theme.number(11, weight: .regular)).foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(hovered ? Theme.fill : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.leading, 34).padding(.trailing, 34).padding(.vertical, 4)
+            .background(hovered ? Theme.fill : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .opacity(selected ? 1 : 0.55)
         }
         .buttonStyle(PressableStyle())
         .disabled(disabled)
         .onHover { hovered = $0 }
+        .help((detail.path as NSString).abbreviatingWithTildeInPath)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// Last two parts, which tell items apart ("Slack/Cache", "my-app/node_modules"); the full path is the tooltip.
+    private var shortPath: String {
+        URL(fileURLWithPath: detail.path).pathComponents.suffix(2).joined(separator: "/")
     }
 }
 
