@@ -68,6 +68,7 @@ struct MenuBarView: View {
             Divider()
             Toggle("Spouštět po přihlášení", isOn: Binding(get: { LoginItem.enabled }, set: { LoginItem.enabled = $0 }))
             Toggle("Úklid každou neděli v 10:00", isOn: Binding(get: { sweeper.autoEnabled }, set: { sweeper.setAuto($0) }))
+            projectFoldersMenu
             Picker("V menu baru ukazovat", selection: Binding(get: { monitor.readout }, set: { monitor.readout = $0 })) {
                 Text("Jen ikonu").tag(SystemMonitor.Readout.none)
                 Text("Teplotu").tag(SystemMonitor.Readout.temp)
@@ -86,6 +87,18 @@ struct MenuBarView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel("Další volby")
+    }
+
+    /// Where stale node_modules are looked for. Unticking a folder removes it from the list.
+    private var projectFoldersMenu: some View {
+        Menu("Složky s projekty") {
+            ForEach(sweeper.projectFolders, id: \.self) { path in
+                Toggle((path as NSString).abbreviatingWithTildeInPath, isOn: Binding(get: { true }, set: { _ in sweeper.removeProjectFolder(path) }))
+            }
+            if sweeper.projectFolders.isEmpty { Text("Žádné, nepoužívané node_modules se nehledají") }
+            Divider()
+            Button("Přidat složku…", action: chooseProjectFolders)
+        }
     }
 
     // MARK: Warnings (only when something is actually wrong)
@@ -206,6 +219,18 @@ struct MenuBarView: View {
         state.section = section
         openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func chooseProjectFolders() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = true
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+        panel.message = "Vyber složky, ve kterých máš projekty. MacSweep v nich hledá nepoužívané node_modules."
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK else { return }
+        sweeper.addProjectFolders(panel.urls)
     }
 
     private func askAdvisorAboutDisk() {

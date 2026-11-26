@@ -2,6 +2,7 @@
 # Disk cleanup. Bundled in MacSweep.app, which runs it on demand and every Sunday at 10:00.
 #   --dry-run   print "<category>\t<bytes>" for what would be removed, change nothing
 # Categories listed one per line in ~/.config/disk-cleanup/skip are left alone (MacSweep writes it).
+# ~/.config/disk-cleanup/projects lists folders searched for stale node_modules, one per line (MacSweep writes it).
 # DISK_CLEANUP_PROGRESS=<file>: the category being cleaned is written there (MacSweep shows it).
 # Log: ~/Library/Logs/disk-cleanup/cleanup.log
 set -u
@@ -12,6 +13,7 @@ DRY=0
 LOW_SPACE_GB=25
 LOG_DIR="$HOME/Library/Logs/disk-cleanup"
 SKIP_FILE="$HOME/.config/disk-cleanup/skip"
+PROJECTS_FILE="$HOME/.config/disk-cleanup/projects"
 mkdir -p "$LOG_DIR"
 [ $DRY = 0 ] && exec >>"$LOG_DIR/cleanup.log" 2>&1
 
@@ -21,6 +23,17 @@ notify() { osascript -e "display notification \"$1\" with title \"MacSweep\""; }
 size_of() { xargs -0 du -sk 2>/dev/null | awk '{s+=$1} END {print s*1024+0}'; }
 report() { printf '%s\t%s\n' "$1" "$2"; }
 existing() { for p in "$@"; do [ -n "$p" ] && [ -e "$p" ] && printf '%s\0' "$p"; done; }
+# Moves the given paths to the Trash (recoverable). NSFileManager via JXA: /usr/bin/trash needs macOS 15.
+trash_paths() {
+  [ $# -gt 0 ] || return 0
+  osascript -l JavaScript -e 'function run(argv) {
+    ObjC.import("Foundation")
+    argv.forEach(p => {
+      const ok = $.NSFileManager.defaultManager.trashItemAtURLResultingItemURLError($.NSURL.fileURLWithPath(p), null, null)
+      console.log((ok ? "trashed: " : "failed to trash: ") + p)
+    })
+  }' "$@"
+}
 # True when this category should be cleaned now; also announces it to MacSweep.
 clean() {
   if grep -qx "$1" "$SKIP_FILE" 2>/dev/null; then echo "skipped: $1"; return 1; fi
@@ -37,12 +50,31 @@ if [ $DRY = 1 ]; then
   report caches "$(existing "${CACHES[@]}" | size_of)"
 elif clean caches; then
   rm -rf "${CACHES[@]}"
-  docker info >/dev/null 2>&1 && docker builder prune -af >/dev/null 2>&1
   echo "caches cleaned"
 fi
 
-# App caches (Chrome, Spotify). Emptied, not removed, so running apps can keep writing.
-APP_CACHES=("$HOME/Library/Caches/Google" "$HOME/Library/Caches/com.spotify.client")
+# Docker build cache, only when Docker (or OrbStack) is running
+docker_build_cache() {
+  docker info >/dev/null 2>&1 || { echo 0; return; }
+  docker system df --format '{{.Type}}\t{{.Size}}' 2>/dev/null | LC_ALL=C awk -F'\t' '$1 == "Build Cache" {
+    n = $2 + 0; u = $2; sub(/^[0-9.]+/, "", u)
+    m = (u == "kB") ? 1e3 : (u == "MB") ? 1e6 : (u == "GB") ? 1e9 : (u == "TB") ? 1e12 : 1
+    printf "%.0f", n * m; found = 1
+  } END { if (!found) print 0 }'
+}
+if [ $DRY = 1 ]; then
+  report docker "$(docker_build_cache)"
+elif clean docker; then
+  docker info >/dev/null 2>&1 && docker builder prune -af >/dev/null 2>&1
+  echo "docker build cache pruned"
+fi
+
+# App caches (browsers, Spotify, Electron apps). Emptied, not removed, so running apps can keep writing.
+APP_CACHES=("$HOME/Library/Caches/Google" "$HOME/Library/Caches/Firefox" "$HOME/Library/Caches/BraveSoftware"
+  "$HOME/Library/Caches/Microsoft Edge" "$HOME/Library/Caches/com.operasoftware.Opera" "$HOME/Library/Caches/com.spotify.client")
+for app in Slack discord Code Notion; do
+  for c in Cache "Code Cache" GPUCache; do APP_CACHES+=("$HOME/Library/Application Support/$app/$c"); done
+done
 if [ $DRY = 1 ]; then
   report app_caches "$(existing "${APP_CACHES[@]}" | size_of)"
 elif clean app_caches; then
@@ -97,12 +129,18 @@ old_downloads() { find "$HOME/Downloads" -mindepth 1 -maxdepth 1 ! -name '.*' -m
 if [ $DRY = 1 ]; then
   report downloads "$(old_downloads | size_of)"
 elif clean downloads; then
-  old_downloads | while IFS= read -r -d '' f; do trash "$f" && echo "trashed: $f"; done
+  files=()
+  while IFS= read -r -d '' f; do files+=("$f"); done < <(old_downloads)
+  trash_paths ${files[@]+"${files[@]}"}
 fi
 
-# node_modules of projects in ~/Github without file changes for 30 days
+# node_modules of projects in the folders from $PROJECTS_FILE without file changes for 30 days
+project_dirs() {
+  [ -f "$PROJECTS_FILE" ] || return 0
+  while IFS= read -r d; do [ -n "$d" ] && [ -d "$d" ] && printf '%s\0' "$d"; done <"$PROJECTS_FILE"
+}
 stale_node_modules() {
-  find "$HOME/Github" -maxdepth 4 -type d -name node_modules -not -path '*/.next/*' -prune -print0 |
+  project_dirs | xargs -0 -I{} find {} -maxdepth 4 -type d -name node_modules -not -path '*/.next/*' -prune -print0 |
     while IFS= read -r -d '' nm; do
       project=$(dirname "$nm")
       recent=$(find "$project" \( -name node_modules -o -name .git -o -name .next \) -prune \

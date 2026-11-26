@@ -7,7 +7,8 @@ A menu bar app that keeps a Mac's disk clean and shows what's slowing it down. N
 ## What it does
 
 **Menu bar**
-- Free space at a glance, plus a one-click sweep. Each category (developer caches, app caches, Xcode build data, Homebrew downloads, old logs, old Downloads, unused `node_modules`) can be unticked.
+- Free space at a glance, plus a one-click sweep. Each category (developer caches, Docker build cache, app caches, Xcode build data, Homebrew downloads, old logs, old Downloads, unused `node_modules`) can be unticked.
+- Unused `node_modules` are looked for in your project folders. The common ones (`~/Github`, `~/Developer`, `~/Projects`…) are picked up on first launch; change them under ⋯ › Složky s projekty.
 - Optional weekly sweep every Sunday at 10:00. It catches up if the Mac was asleep.
 - Trash size, with a button to empty it.
 - Vitals: CPU temperature and fan, CPU, memory, battery (including which apps drained it since unplugging), network and uptime.
